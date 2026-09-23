@@ -1,0 +1,18 @@
+name: NexusTrails
+main: cc.nexusdev.trails.NexusTrailsPlugin
+version: ${project.version}
+description: Personal particle trails to saved waypoints and recorded routes.
+api-version: '1.21.11'
+folia-supported: true
+author: NexusDev
+commands:
+  trail:
+    description: Follow a particle trail to a destination.
+    usage: /trail <destination|list|stop|help>
+permissions:
+  nexustrails.use:
+    description: Follow trails and list destinations.
+    default: true
+  nexustrails.admin:
+    description: Create, record, delete and reload trails.
+    default: op
