@@ -12,6 +12,8 @@ final class ViewerParticleSink implements ParticleSink, AutoCloseable {
     private final long frameSeed;
     private int remaining;
     private boolean closed;
+    private double lastBrightness=Double.NaN,lastColorPosition=Double.NaN;
+    private Object lastData;
     ViewerParticleSink(Player player,AnimationStyle style,int budget,long seed) {
         this.player=player; this.style=style; remaining=budget; frameSeed=seed;
     }
@@ -19,13 +21,19 @@ final class ViewerParticleSink implements ParticleSink, AutoCloseable {
         check();
         if(!Double.isFinite(brightness)||!Double.isFinite(colorPosition)) throw new IllegalArgumentException("Non-finite appearance");
         if(remaining==0 || brightness<=0 || style.brightness()==0) return false;
-        Color color=style.color(colorPosition,brightness);
+        if(point==null)throw new IllegalArgumentException("Particle position is required");
         Object data;
-        if(style.particle()==Particle.DUST) data=new Particle.DustOptions(color,style.size());
-        else if(style.particle()==Particle.DUST_COLOR_TRANSITION)
-            data=new Particle.DustTransition(color,style.color(Math.min(1,colorPosition+.15),brightness*.5),style.size());
+        if(style.particle()==Particle.DUST || style.particle()==Particle.DUST_COLOR_TRANSITION) {
+            if(brightness!=lastBrightness || colorPosition!=lastColorPosition) {
+                Color color=style.color(colorPosition,brightness);
+                lastData=style.particle()==Particle.DUST?new Particle.DustOptions(color,style.size()):
+                        new Particle.DustTransition(color,style.color(Math.min(1,colorPosition+.15),brightness*.5),style.size());
+                lastBrightness=brightness;lastColorPosition=colorPosition;
+            }
+            data=lastData;
+        }
         else if(style.particle()==Particle.TRAIL)
-            data=new Particle.Trail(new Location(player.getWorld(),point.x(),point.y(),point.z()),color,style.durationTicks());
+            data=new Particle.Trail(new Location(player.getWorld(),point.x(),point.y(),point.z()),style.color(colorPosition,brightness),style.durationTicks());
         else {
             // Non-colorable particles approximate brightness through deterministic emission density.
             long bits=Double.doubleToLongBits(point.x())^Long.rotateLeft(Double.doubleToLongBits(point.z()),23)^frameSeed;
@@ -33,7 +41,7 @@ final class ViewerParticleSink implements ParticleSink, AutoCloseable {
             if(chance>Math.clamp(brightness*style.brightness(),0,1)) return false;
             data=null;
         }
-        return emit(style.particle(),point,1,data);
+        return send(style.particle(),point,1,data);
     }
     @Override public boolean emit(Particle particle,AnimationPoint point,int count,Object data) {
         check();
@@ -41,6 +49,9 @@ final class ViewerParticleSink implements ParticleSink, AutoCloseable {
         if(particle==null||point==null) throw new IllegalArgumentException("Particle and position are required");
         Class<?> type=particle.getDataType();
         if(type==Void.class ? data!=null : !type.isInstance(data)) throw new IllegalArgumentException("Wrong data type for "+particle);
+        return send(particle,point,count,data);
+    }
+    private boolean send(Particle particle,AnimationPoint point,int count,Object data) {
         if(remaining==0) return false;
         int emitted=Math.min(count,remaining);
         remaining-=emitted;

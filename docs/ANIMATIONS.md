@@ -1,6 +1,6 @@
 # Trail animations
 
-Nexus Trails 1.4.1 gives each of the original 46 effects its own particle shape and adds `walking-ghost`, for 47 effects total. Hearts, stars, chevrons, clock faces, shoe outlines, hourglasses, gears, door leaves and humanoid figures move along the route. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
+Nexus Trails 1.4.2 gives each of the original 46 effects its own particle shape and adds `walking-ghost`, for 47 effects total. Hearts, stars, chevrons, clock faces, shoe outlines, hourglasses, gears, door leaves and humanoid figures move along the route. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
 
 ## Server configuration and commands
 
@@ -152,7 +152,7 @@ The end of the currently visible walking section is the animation's forward dire
 
 ## API selection
 
-Use the `nexustrails` **1.4.1** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
+Use the `nexustrails` **1.4.2** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
 
 ```java
 import cc.nexusdev.trails.api.animation.TrailAnimationAPI;
@@ -218,6 +218,8 @@ animations.register(this, "myplugin:aurora", (frame, particles) -> {
 ```
 
 `frame.path()` is an immutable snapshot of the current visible section. `frame.point(u, lateral, vertical)` uses normalized progress and style-scaled local offsets. For rigid custom shapes use `frame.localPoint(u, forward, lateral, vertical)`: it anchors the shape to the route's heading without bending its outline around corners or flattening it at endpoints. Forward/lateral coordinates use width and scale; vertical coordinates use height and scale. `path.at(distance)` uses distances in blocks. `frame.playerPosition()` is a snapshot, not a live Bukkit entity. `elapsedSeconds`, `seed`, `spacing`, `budget` and `style` are available. `frame.state()` is scratch storage isolated by player, trail kind, source and selected animation; it is reset on selection changes, teleport, trail cleanup and configuration reload. Use it for waiting guides or particle histories. Do not store unbounded histories.
+
+For many vertices at the same anchor, compute `AnimationTransform transform = frame.localTransform(0.5)` once and call `transform.point(forward, lateral, vertical)` inside the vertex loop. The immutable transform avoids repeating route interpolation and heading calculations for every particle. Create a new transform for the next frame when the visible path changes. Built-in effects use this path and bounded, immutable unit-shape caches without reducing their particle detail.
 
 For a custom Bukkit particle with explicit data:
 

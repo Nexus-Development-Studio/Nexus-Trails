@@ -111,10 +111,12 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         if (position.distanceSquared(endpoint) <= render.arrivalRadius() * render.arrivalRadius()) {
             notice(player, session, "Quest destination reached."); return;
         }
-        boolean offPath = session.plan != null && session.plan.path.at(session.plan.path.progress(position)).distanceSquared(position) > 9;
+        double progress=session.plan==null?0:session.plan.path.progress(position);
+        boolean offPath = session.plan != null && session.plan.path.at(progress).distanceSquared(position) > 9;
         if (session.planTarget == null || endpoint.distanceSquared(session.planTarget) > .25
                 || session.ticks - session.planAt >= 40 || offPath || session.routeSnapshot != store.all() || session.config != config) {
             session.plan = plan(player.getWorld(), session, position, endpoint);
+            progress=session.plan==null?0:session.plan.path.progress(position);
             session.planTarget = endpoint;
             session.planAt = session.ticks;
             session.routeSnapshot = store.all();
@@ -125,12 +127,12 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
             return;
         }
         RouteGeometry.Path path = session.plan.path;
-        double progress = path.progress(position);
         double end = Math.min(path.length(), progress + render.maxAhead());
         // Render the usable prefix. A later obstruction must not hide the road leading up to it.
         List<Route.Point> visible = new ArrayList<>();
+        SafeCorridor.Snapshot corridor=new SafeCorridor.Snapshot(player.getWorld());
         for (double d = progress; ; d = Math.min(end, d + .2)) {
-            Route.Point adjusted = SafeCorridor.adjust(player.getWorld(), path.at(d));
+            Route.Point adjusted = corridor.adjust(path.at(d));
             if (adjusted == null) break;
             QuestPath.append(visible, adjusted);
             if (d >= end) break;
@@ -160,8 +162,9 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         }
         entrances.sort(Comparator.comparingDouble(QuestPath.Entrance::distanceSquared));
         Plan partial = null;
+        SafeCorridor.Snapshot corridor=new SafeCorridor.Snapshot(world);
         for (QuestPath.Entrance entrance : entrances.stream().limit(3).toList()) {
-            WalkingConnector.Result connection = WalkingConnector.find(world, position, entrance.tail().getFirst(), config.connectorNodes / 3);
+            WalkingConnector.Result connection = WalkingConnector.find(corridor, position, entrance.tail().getFirst(), config.connectorNodes / 3);
             if (connection == null) continue;
             List<Route.Point> points = new ArrayList<>(connection.points());
             if (connection.complete()) {

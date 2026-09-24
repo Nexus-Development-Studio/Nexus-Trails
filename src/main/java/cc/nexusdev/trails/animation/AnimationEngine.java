@@ -17,6 +17,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class AnimationEngine implements TrailAnimationAPI, Listener {
+    private static final java.util.regex.Pattern VALID_ID=java.util.regex.Pattern.compile("[a-z0-9_.-]+:[a-z0-9/.-]+");
     private record Registration(Plugin owner,TrailAnimation animation) {}
     private record Key(UUID player,TrailKind kind) {}
     private static final class FrameState {
@@ -74,7 +75,7 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
     public static String id(String value) {
         String id=Objects.requireNonNull(value).trim().toLowerCase(Locale.ROOT).replace('_','-');
         if(!id.contains(":")) id="nexustrails:"+id;
-        if(!id.matches("[a-z0-9_.-]+:[a-z0-9/.-]+")) throw new IllegalArgumentException("Invalid animation ID: "+value);
+        if(!VALID_ID.matcher(id).matches()) throw new IllegalArgumentException("Invalid animation ID: "+value);
         return id;
     }
     private void open() { if(closed) throw new IllegalStateException("Animation API is disabled"); }
@@ -120,7 +121,7 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         Bukkit.getPluginManager().callEvent(event);
         if(event.isCancelled()) return;
         String selected;
-        try { selected=id(event.getAnimationId()); } catch(IllegalArgumentException invalid) { selected=snapshot.fallback(); }
+        try { selected=requested.equals(event.getAnimationId())?requested:id(event.getAnimationId()); } catch(IllegalArgumentException invalid) { selected=snapshot.fallback(); }
         if(!registry.containsKey(selected)) selected=snapshot.fallback();
         if(event.isStyleChanged()) style=event.getStyle();
         else if(!selected.equals(requested)) style=preferences.style(uuid,snapshot.style(selected));

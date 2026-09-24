@@ -19,13 +19,15 @@ public record AnimationFrame(UUID playerId, TrailKind kind, String source, Anima
      * Forward/lateral offsets use width and scale; vertical offsets use height and scale.
      */
     public AnimationPoint localPoint(double progress, double forward, double lateral, double vertical) {
+        return localTransform(progress).point(forward,lateral,vertical);
+    }
+    /** Compute the route anchor/heading once, then reuse its transform for a complete shape. */
+    public AnimationTransform localTransform(double progress) {
         double distance=Math.clamp(progress,0,1)*path.length();
         AnimationPoint a=path.at(distance-.15), b=path.at(distance+.15);
         double dx=b.x()-a.x(), dz=b.z()-a.z(), length=Math.hypot(dx,dz);
         if(length<1e-8) { dx=0;dz=1;length=1; }
         dx/=length;dz/=length;
-        double horizontal=style.width()*style.scale();
-        return path.at(distance).add((dx*forward-dz*lateral)*horizontal,
-                vertical*style.height()*style.scale(),(dz*forward+dx*lateral)*horizontal);
+        return new AnimationTransform(path.at(distance),dx,dz,style.width()*style.scale(),style.height()*style.scale());
     }
 }

@@ -11,6 +11,22 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SafeCorridorTest {
+    @Test void snapshotReusesCollisionShapesAndNextUpdateSeesBlockChanges() {
+        World world=WalkingConnectorTest.flat();
+        for(int i=0;i<=100;i++)assertNotNull(SafeCorridor.adjust(world,new Route.Point(.5+i*.2,64,.5)));
+        long uncached=mockingDetails(world).getInvocations().stream().filter(i->i.getMethod().getName().equals("getBlockAt")).count();
+        clearInvocations(world);
+        var snapshot=new SafeCorridor.Snapshot(world);
+        for(int i=0;i<=100;i++)assertNotNull(snapshot.adjust(new Route.Point(.5+i*.2,64,.5)));
+        long cached=mockingDetails(world).getInvocations().stream().filter(i->i.getMethod().getName().equals("getBlockAt")).count();
+        assertTrue(cached<uncached/4,"Cached block queries: "+cached+" vs "+uncached);
+        Block obstacle=WalkingConnectorTest.shape(new BoundingBox(0,0,0,1,1,1));
+        when(world.getBlockAt(3,65,0)).thenReturn(obstacle);
+        assertNull(new SafeCorridor.Snapshot(world).adjust(new Route.Point(3.5,64,.5)));
+        when(world.isChunkLoaded(0,0)).thenReturn(false);clearInvocations(world);
+        assertFalse(new SafeCorridor.Snapshot(world).clear(new Route.Point(3.5,64,.5)));
+        verify(world,never()).getBlockAt(anyInt(),anyInt(),anyInt());
+    }
     @Test void translatesLocalCollisionBoxesAndDetectsLowCeilingsAndFences() {
         World world = mock(World.class);
         when(world.getMinHeight()).thenReturn(-64);

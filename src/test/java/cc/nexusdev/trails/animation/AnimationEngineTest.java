@@ -150,6 +150,21 @@ class AnimationEngineTest {
         assertThrows(IllegalStateException.class,()->retained[0].remaining());
     }
 
+    @Test void reusedDustDataPreservesColorsAndExplicitDataValidation() {
+        var style=engine.style("comet");
+        var point=new AnimationPoint(0,64,0);
+        try(var sink=new ViewerParticleSink(viewer,style,5,73)) {
+            sink.emit(point,.8,.3);sink.emit(point.add(1,0,0),.8,.3);sink.emit(point.add(2,0,0),.5,.3);
+            assertThrows(IllegalArgumentException.class,()->sink.emit(Particle.DUST,point,1,null));
+            assertEquals(2,sink.remaining());
+        }
+        var data=org.mockito.ArgumentCaptor.forClass(Particle.DustOptions.class);
+        verify(viewer,times(3)).spawnParticle(eq(Particle.DUST),anyDouble(),anyDouble(),anyDouble(),eq(1),eq(0.0),eq(0.0),eq(0.0),eq(0.0),data.capture());
+        assertSame(data.getAllValues().get(0),data.getAllValues().get(1));
+        assertEquals(style.color(.3,.8),data.getAllValues().get(0).getColor());
+        assertEquals(style.color(.3,.5),data.getAllValues().get(2).getColor());
+    }
+
     @Test void ownershipAndPluginDisableCleanupProtectRegistrations() {
         engine.register(extension,"example:custom",(frame,sink)->{});
         assertThrows(IllegalArgumentException.class,()->engine.register(extension,"comet",(f,s)->{}));

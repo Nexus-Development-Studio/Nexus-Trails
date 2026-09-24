@@ -6,7 +6,7 @@ Standalone personal particle navigation, extracted from NexusRegionManager's tra
 
 ## Install
 
-1. Put `nexustrails-1.4.1.jar` in the server's `plugins` folder.
+1. Put `nexustrails-1.4.2.jar` in the server's `plugins` folder.
 2. Start/restart the server. Settings appear in `plugins/NexusTrails/config.yml`.
 3. As an operator, create a destination using one of the examples below.
 
@@ -15,6 +15,8 @@ The particle trail is visible only to the player following it. All 47 effects dr
 Animation selections and API style overrides persist by player UUID in `animation-preferences.yml` across logout, reload and restart. Restored quest trails retain the chosen animation until explicitly changed or reset. After upgrading from 1.3.0, select any previously lost choices once to save them.
 
 Use `/trailanimation set <player> walking-ghost` to select the new ghost. Existing animation IDs and saved choices remain valid; missing shape settings and the ghost's configurable black palette are added to `animations.yml` automatically on upgrade.
+
+Version 1.4.2 reduces animation computation and allocation, indexes long routes for nearest-point queries, and reuses collision shapes within each synchronous search/update. Particle detail, budgets and saved selections are preserved. See [performance measurements and reproduction steps](docs/PERFORMANCE.md); the offline results do not measure live server TPS, network traffic or client FPS.
 
 ## Quick waypoint
 
@@ -123,7 +125,7 @@ Record a route normally, use the elevator, then keep walking and save. Nexus Tra
 
 [Simple Elevators](https://www.spigotmc.org/resources/simple-elevators-1-8-26-2.44462/) uses Space to go up and Shift to go down. Nexus Trails relies on the resulting normal teleport event, so no Simple Elevators dependency or special config is required. Live compatibility with the installed elevator build should still be checked on a server.
 
-For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.4.1 and restart; the new `animations.yml` is created automatically.
+For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.4.2 and restart; the new `animations.yml` is created automatically.
 
 ### Console commands
 
@@ -179,7 +181,7 @@ The `api` classifier JAR contains only the public interface. Run `mvn install` l
 <dependency>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.4.1</version>
+  <version>1.4.2</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>

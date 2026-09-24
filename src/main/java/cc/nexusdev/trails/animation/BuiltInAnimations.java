@@ -2,6 +2,7 @@ package cc.nexusdev.trails.animation;
 
 import cc.nexusdev.trails.api.animation.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /** Procedural geometry and envelopes only. Appearance comes exclusively from AnimationStyle. */
 public final class BuiltInAnimations {
@@ -27,10 +28,17 @@ public final class BuiltInAnimations {
 
     private static final class Draw {
         private static final double TAU=Math.PI*2;
+        // The density limit bounds unit templates to 576 vertices. Templates are read-only.
+        private static final AtomicReferenceArray<double[][]> CIRCLES=new AtomicReferenceArray<>(577);
+        private static final AtomicReferenceArray<double[][]> HEARTS=new AtomicReferenceArray<>(577);
         final AnimationFrame f;
         final ParticleSink sink;
         final double p,t,width,tail,frequency,shapeSize,density;
         final int samples,markers;
+        double anchorProgress=Double.NaN;
+        AnimationTransform anchor;
+        double pointProgress=Double.NaN,normalX,normalZ;
+        AnimationPoint pointOrigin;
         Draw(AnimationFrame frame,ParticleSink sink) {
             f=frame; this.sink=sink; p=f.phase(); t=f.elapsedSeconds()/f.style().periodSeconds();
             width=param("pulse-width",.12,.01,1); tail=param("tail-length",.3,.01,1);
@@ -43,7 +51,17 @@ public final class BuiltInAnimations {
         double param(String key,double value,double min,double max) { return Math.clamp(f.style().parameter(key,value),min,max); }
         double u(int i) { return (double)i/(samples-1); }
         void dot(double u,double side,double up,double light) {
-            if (light>.003 && sink.remaining()>0) sink.emit(f.point(u,side,up),clamp(light),clamp(u));
+            if (light<=.003 || sink.remaining()==0)return;
+            double progress=Math.clamp(u,0,1);
+            if(progress!=pointProgress) {
+                double distance=progress*f.path().length();
+                AnimationPoint a=f.path().at(Math.max(0,distance-.15)),b=f.path().at(Math.min(f.path().length(),distance+.15));
+                double dx=b.x()-a.x(),dz=b.z()-a.z(),norm=Math.hypot(dx,dz);
+                normalX=norm<1e-8?1:-dz/norm;normalZ=norm<1e-8?0:dx/norm;
+                pointOrigin=f.path().at(distance);pointProgress=progress;
+            }
+            double lateral=side*f.style().width()*f.style().scale();
+            sink.emit(pointOrigin.add(normalX*lateral,up*f.style().height()*f.style().scale(),normalZ*lateral),clamp(light),clamp(u));
         }
         void base() { for(int i=0;i<samples;i+=3) dot(u(i),0,0,f.style().baseBrightness()); }
         double noise(int i) { return random(f.seed()+i*0x9E3779B97F4A7C15L); }
@@ -54,6 +72,10 @@ public final class BuiltInAnimations {
         int count(int cost) { return Math.min(markers,Math.max(1,f.budget()/dense(cost))); }
         int detail() { return (int)param("shape-points",24,12,256); }
         double marker(int i,int count) { return (i+.5)/count; }
+        AnimationTransform local(double center) {
+            if(center!=anchorProgress) {anchor=f.localTransform(center);anchorProgress=center;}
+            return anchor;
+        }
         // Equal-distance samples cover the entire contour, even with a small particle budget.
         // Local rigid coordinates keep a recognizable silhouette at bends and route endpoints.
         void symbol(double center,double side,double up,double size,double rotation,boolean upright,
@@ -66,14 +88,18 @@ public final class BuiltInAnimations {
                 total+=lengths[i]=Math.hypot(b[0]-a[0],b[1]-a[1]);
             }
             int n=Math.min(dense(points),sink.remaining());
+            AnimationTransform transform=local(center);
+            double cos=Math.cos(rotation),sin=Math.sin(rotation),factor=size*shapeSize;
+            int edge=0;double consumed=0;
             for(int j=0;j<n;j++) {
-                double distance=total*j/Math.max(1,closed?n:n-1);int edge=0;
-                while(edge<edges-1 && distance>lengths[edge]) distance-=lengths[edge++];
+                double distance=total*j/Math.max(1,closed?n:n-1);
+                while(edge<edges-1 && distance-consumed>lengths[edge]) consumed+=lengths[edge++];
+                distance-=consumed;
                 double[] a=vertices[edge],b=vertices[(edge+1)%vertices.length];
                 double q=lengths[edge]<1e-9?0:distance/lengths[edge];
-                double x=(a[0]+(b[0]-a[0])*q)*size*shapeSize,y=(a[1]+(b[1]-a[1])*q)*size*shapeSize;
-                double rx=x*Math.cos(rotation)-y*Math.sin(rotation),ry=x*Math.sin(rotation)+y*Math.cos(rotation);
-                sink.emit(f.localPoint(center,upright?0:ry,side+rx,up+(upright?ry:0)),clamp(light),clamp(center));
+                double x=(a[0]+(b[0]-a[0])*q)*factor,y=(a[1]+(b[1]-a[1])*q)*factor;
+                double rx=x*cos-y*sin,ry=x*sin+y*cos;
+                sink.emit(transform.point(upright?0:ry,side+rx,up+(upright?ry:0)),clamp(light),clamp(center));
             }
         }
         void glyph(double center,double up,double size,double light,boolean upright,double[][] vertices) {
@@ -81,17 +107,21 @@ public final class BuiltInAnimations {
         }
         double[][] circle(int n) {
             n=dense(n);
+            double[][] cached=CIRCLES.get(n);if(cached!=null)return cached;
             double[][] v=new double[n][2];
-            for(int i=0;i<n;i++) {v[i][0]=Math.cos(TAU*i/n);v[i][1]=Math.sin(TAU*i/n);}return v;
+            for(int i=0;i<n;i++) {v[i][0]=Math.cos(TAU*i/n);v[i][1]=Math.sin(TAU*i/n);}
+            CIRCLES.compareAndSet(n,null,v);return CIRCLES.get(n);
         }
         double[][] star(int tips,double inner) {
             double[][] v=new double[tips*2][2];
             for(int i=0;i<v.length;i++) {double a=TAU*i/v.length+Math.PI/2,r=i%2==0?1:inner;v[i][0]=Math.cos(a)*r;v[i][1]=Math.sin(a)*r;}return v;
         }
         double[][] heart() {
-            double[][] v=new double[dense(48)][2];
+            int n=dense(48);double[][] cached=HEARTS.get(n);if(cached!=null)return cached;
+            double[][] v=new double[n][2];
             for(int i=0;i<v.length;i++) {double a=TAU*i/v.length;v[i][0]=Math.pow(Math.sin(a),3);
-                v[i][1]=(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))/16;}return v;
+                v[i][1]=(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))/16;}
+            HEARTS.compareAndSet(n,null,v);return HEARTS.get(n);
         }
         double[][] drop() {
             return new double[][]{{0,1},{.35,.3},{.55,-.25},{.4,-.7},{0,-.9},{-.4,-.7},{-.55,-.25},{-.35,.3}};
@@ -276,7 +306,7 @@ public final class BuiltInAnimations {
                     int points=dense(4);
                     for(int i=0;i<outline.length*points;i++) {int edge=i/points;double q=(i%points)/(double)points;
                         double[] a=outline[edge],b=outline[(edge+1)%outline.length];
-                        sink.emit(f.localPoint(center,(a[1]+(b[1]-a[1])*q)*shapeSize+(noise(i)-.5)*2*(1-gather),
+                        sink.emit(local(center).point((a[1]+(b[1]-a[1])*q)*shapeSize+(noise(i)-.5)*2*(1-gather),
                                 (a[0]+(b[0]-a[0])*q)*shapeSize+(noise(i+30)-.5)*2*(1-gather),
                                 .4+(noise(i+60)-.5)*(1-gather)),.25+.75*gather,center); }
                 }
@@ -287,7 +317,8 @@ public final class BuiltInAnimations {
                 }
                 case INK_REVEAL -> {
                     int n=count(detail());
-                    for(int i=0;i<n;i++) {double age=frac(p-i/(double)n);double[][] blob=circle(40);
+                    for(int i=0;i<n;i++) {double age=frac(p-i/(double)n);double[][] template=circle(40),blob=new double[template.length][2];
+                        for(int j=0;j<blob.length;j++){blob[j][0]=template[j][0];blob[j][1]=template[j][1];}
                         for(int j=0;j<blob.length;j++) {double a=TAU*j/blob.length,r=.7+.2*Math.sin(a*3+i)+.1*Math.sin(a*7);blob[j][0]*=r;blob[j][1]*=r;}
                         glyph(marker(i,n),.02,.15+age,fade(age),false,blob);}
                 }
@@ -458,7 +489,7 @@ public final class BuiltInAnimations {
         void bodyLine(List<AnimationPoint> points,double center,double[] a,double[] b,int count) {
             count=dense(count);
             for(int i=0;i<count;i++) {double q=i/(double)(count-1);
-                points.add(f.localPoint(center,(a[0]+(b[0]-a[0])*q)*shapeSize,
+                points.add(local(center).point((a[0]+(b[0]-a[0])*q)*shapeSize,
                         (a[1]+(b[1]-a[1])*q)*shapeSize,(a[2]+(b[2]-a[2])*q)*shapeSize));}
         }
 
@@ -466,7 +497,7 @@ public final class BuiltInAnimations {
             int grid=(int)Math.ceil(2*Math.sqrt(density));
             for(int i=1;i<grid;i++)for(int j=1;j<grid;j++) {
                 double x=i/(double)grid,y=j/(double)grid;
-                points.add(f.localPoint(center,(origin[0]+right[0]*x+up[0]*y)*shapeSize,
+                points.add(local(center).point((origin[0]+right[0]*x+up[0]*y)*shapeSize,
                         (origin[1]+right[1]*x+up[1]*y)*shapeSize,(origin[2]+right[2]*x+up[2]*y)*shapeSize));
             }
         }
@@ -475,7 +506,7 @@ public final class BuiltInAnimations {
             int steps=dense(2);double dx=b[0]-a[0],dy=b[2]-a[2],length=Math.max(.001,Math.hypot(dx,dy));
             for(int i=0;i<steps;i++)for(int j=0;j<4;j++) {
                 double q=i/(double)(steps-1),angle=TAU*j/4,n=Math.sin(angle)*radius;
-                points.add(f.localPoint(center,(a[0]+dx*q-dy/length*n)*shapeSize,
+                points.add(local(center).point((a[0]+dx*q-dy/length*n)*shapeSize,
                         (a[1]+(b[1]-a[1])*q+Math.cos(angle)*radius)*shapeSize,(a[2]+dy*q+dx/length*n)*shapeSize));
             }
         }
@@ -533,12 +564,12 @@ public final class BuiltInAnimations {
                 for(int i=0;i<outline.length;i++) {
                     double[] a=outline[i],b=outline[(i+1)%outline.length];
                     for(int j=0;j<dense(2);j++) {double q=j/(double)dense(2);
-                        points.add(f.localPoint(center,(a[1]+(b[1]-a[1])*q)*shapeSize,
+                        points.add(local(center).point((a[1]+(b[1]-a[1])*q)*shapeSize,
                                 side*.35+(a[0]+(b[0]-a[0])*q)*shapeSize,0));}
                 }
                 if(density>1) for(int row=0;row<5;row++)for(int j=0;j<dense(2);j++) {
                     double forward=-.3+row*.15,lateral=-.12+j/(double)(dense(2)-1)*.24;
-                    points.add(f.localPoint(center,forward*shapeSize,side*.35+lateral*shapeSize,0));
+                    points.add(local(center).point(forward*shapeSize,side*.35+lateral*shapeSize,0));
                 }
                 feet.add(new Foot(List.copyOf(points),f.elapsedSeconds(),number));
             }
