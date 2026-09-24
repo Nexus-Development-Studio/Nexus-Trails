@@ -31,6 +31,7 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        if(TrailSettings.upgradeParticleBudget(getConfig())) saveConfig();
         if(!new java.io.File(getDataFolder(),"animations.yml").exists()) saveResource("animations.yml",false);
         store = new RouteStore(getDataFolder().toPath().resolve("destinations.yml"));
         try { store.load(); settings = TrailSettings.read(getConfig()); animations=new AnimationEngine(this); }

@@ -54,8 +54,16 @@ class RouteStoreTest {
         config.set("recording.max-step-distance", 1);
         var settings = TrailSettings.read(config);
         assertTrue(Double.isFinite(settings.spacing()));
-        assertEquals(600, settings.budget());
+        assertEquals(6000, settings.budget());
         assertTrue(settings.maxAhead() > settings.minAhead());
         assertTrue(settings.recordSpacing() < settings.maxStep());
+    }
+    @Test void particleBudgetUpgradeIsOnceOnlyAndPreservesCustomBudgets() {
+        var config=new YamlConfiguration();config.set("render.max-particles-per-update",120);
+        assertTrue(TrailSettings.upgradeParticleBudget(config));assertEquals(1200,TrailSettings.read(config).budget());
+        config.set("render.max-particles-per-update",120);
+        assertFalse(TrailSettings.upgradeParticleBudget(config));assertEquals(120,TrailSettings.read(config).budget());
+        var custom=new YamlConfiguration();custom.set("render.max-particles-per-update",480);
+        assertTrue(TrailSettings.upgradeParticleBudget(custom));assertEquals(480,TrailSettings.read(custom).budget());
     }
 }

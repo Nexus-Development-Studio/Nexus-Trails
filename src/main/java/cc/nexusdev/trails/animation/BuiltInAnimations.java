@@ -29,15 +29,16 @@ public final class BuiltInAnimations {
         private static final double TAU=Math.PI*2;
         final AnimationFrame f;
         final ParticleSink sink;
-        final double p,t,width,tail,frequency,shapeSize;
+        final double p,t,width,tail,frequency,shapeSize,density;
         final int samples,markers;
         Draw(AnimationFrame frame,ParticleSink sink) {
             f=frame; this.sink=sink; p=f.phase(); t=f.elapsedSeconds()/f.style().periodSeconds();
             width=param("pulse-width",.12,.01,1); tail=param("tail-length",.3,.01,1);
             frequency=param("frequency",3,.1,20);
             shapeSize=param("shape-size",.85,.15,3);
+            density=Math.max(1,Math.min(param("detail-multiplier",6,1,12),f.budget()/120.0));
             markers=(int)param("markers",5,1,16);
-            samples=Math.clamp((int)Math.ceil(f.path().length()/f.spacing())+1,2,Math.min(180,Math.max(2,f.budget())));
+            samples=Math.clamp((int)Math.ceil(f.path().length()/f.spacing()*density)+1,2,Math.min(2048,Math.max(2,f.budget())));
         }
         double param(String key,double value,double min,double max) { return Math.clamp(f.style().parameter(key,value),min,max); }
         double u(int i) { return (double)i/(samples-1); }
@@ -49,8 +50,9 @@ public final class BuiltInAnimations {
         double pulse(double x,double center) { double d=(x-center)/width; return Math.exp(-d*d*3); }
         double fade(double age) { return clamp(1-age); }
         double meters(double value) { return value/Math.max(1,f.path().length()); }
-        int count(int cost) { return Math.min(markers,Math.max(1,f.budget()/cost)); }
-        int detail() { return (int)param("shape-points",24,12,64); }
+        int dense(int points) { return Math.max(2,(int)Math.ceil(points*density)); }
+        int count(int cost) { return Math.min(markers,Math.max(1,f.budget()/dense(cost))); }
+        int detail() { return (int)param("shape-points",24,12,256); }
         double marker(int i,int count) { return (i+.5)/count; }
         // Equal-distance samples cover the entire contour, even with a small particle budget.
         // Local rigid coordinates keep a recognizable silhouette at bends and route endpoints.
@@ -63,7 +65,7 @@ public final class BuiltInAnimations {
                 double[] a=vertices[i],b=vertices[(i+1)%vertices.length];
                 total+=lengths[i]=Math.hypot(b[0]-a[0],b[1]-a[1]);
             }
-            int n=Math.min(points,sink.remaining());
+            int n=Math.min(dense(points),sink.remaining());
             for(int j=0;j<n;j++) {
                 double distance=total*j/Math.max(1,closed?n:n-1);int edge=0;
                 while(edge<edges-1 && distance>lengths[edge]) distance-=lengths[edge++];
@@ -78,6 +80,7 @@ public final class BuiltInAnimations {
             symbol(center,0,up,size,0,upright,light,detail(),true,vertices);
         }
         double[][] circle(int n) {
+            n=dense(n);
             double[][] v=new double[n][2];
             for(int i=0;i<n;i++) {v[i][0]=Math.cos(TAU*i/n);v[i][1]=Math.sin(TAU*i/n);}return v;
         }
@@ -86,7 +89,7 @@ public final class BuiltInAnimations {
             for(int i=0;i<v.length;i++) {double a=TAU*i/v.length+Math.PI/2,r=i%2==0?1:inner;v[i][0]=Math.cos(a)*r;v[i][1]=Math.sin(a)*r;}return v;
         }
         double[][] heart() {
-            double[][] v=new double[48][2];
+            double[][] v=new double[dense(48)][2];
             for(int i=0;i<v.length;i++) {double a=TAU*i/v.length;v[i][0]=Math.pow(Math.sin(a),3);
                 v[i][1]=(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))/16;}return v;
         }
@@ -106,12 +109,16 @@ public final class BuiltInAnimations {
             double[][] v=new double[32][2];
             for(int i=0;i<v.length;i++) {double a=TAU*i/v.length,r=i%4<2?1:.72;v[i][0]=Math.cos(a)*r;v[i][1]=Math.sin(a)*r;}
             symbol(center,0,up,size,rotation,false,light,32,true,v);
+            if(density>1) {
+                symbol(center,0,up,size*.3,0,false,light,12,true,circle(32));
+                for(int i=0;i<4;i++)symbol(center,0,up,size,rotation+i*Math.PI/2,false,light*.7,3,false,new double[][]{{0,.3},{0,.7}});
+            }
         }
         void arrow(double center,double light,double side,double up) {
             symbol(center,side,up,1,0,false,light,20,true,arrowOutline());
         }
         void ring(double center,double radius,double up,double light,boolean upright) {
-            int n=(int)param("ring-points",12,6,32);
+            int n=(int)param("ring-points",12,6,128);
             symbol(center,0,up,radius,0,upright,light,n,true,circle(48));
         }
         void silhouette(double center,double light) {
@@ -140,12 +147,12 @@ public final class BuiltInAnimations {
                 case COMET -> {
                     double head=.15+p*.7;
                     glyph(head,.5,.55,1,true,star(5,.45));
-                    int n=Math.max(2,Math.min(36,sink.remaining()/2));
+                    int n=Math.max(2,Math.min(dense(36),sink.remaining()/2));
                     for(int i=0;i<n;i++) {double age=i/(double)(n-1),spread=.42*age;
                         for(int side:new int[]{-1,1}) dot(head-age*tail,side*spread,.5+.25*Math.sin(age*Math.PI),fade(age));}
                 }
                 case WAVE -> {
-                    int n=Math.max(2,Math.min(60,f.budget()/2));
+                    int n=Math.max(2,Math.min(dense(60),f.budget()/2));
                     for(int i=0;i<n;i++) {double q=i/(double)(n-1),a=TAU*(q*frequency-p);
                         dot(q,Math.sin(a)*.6,.6+.25*Math.cos(a),.85);
                         dot(q,Math.sin(a)*.6,.6-.25*Math.cos(a),.4);}
@@ -185,7 +192,7 @@ public final class BuiltInAnimations {
                         glyph(age,1.3-age,.55,.35+.65*fade(age),true,drop());}
                 }
                 case THEATER_CHASE -> {
-                    int n=Math.min(markers*2,Math.max(1,f.budget()/12));
+                    int n=Math.min(markers*2,Math.max(1,f.budget()/dense(12)));
                     for(int i=0;i<n;i++) {double light=Math.floorMod(i-(int)Math.floor(t*frequency),3)==0?1:.1;
                         symbol(marker(i,n),0,.4,.6,0,true,light,12,true,new double[][]{{0,1},{.65,0},{0,-1},{-.65,0}});}
                 }
@@ -216,12 +223,13 @@ public final class BuiltInAnimations {
                     chevron(head,side*.65,.3,.45,0,1);
                 }
                 case CLOCK_HANDS -> {
-                    int n=count((int)param("ring-points",12,6,32)+12);
+                    int n=count((int)param("ring-points",12,6,128)+(density>1?36:12));
                     for(int i=0;i<n;i++) {
                         double c=marker(i,n), a=TAU*p+i*.4;
                         ring(c,.65,.25,.35,false);
                         symbol(c,0,.25,1,a,false,1,6,false,new double[][]{{0,0},{0,.6}});
                         symbol(c,0,.25,1,0,false,.7,6,false,new double[][]{{0,0},{0,.38}});
+                        if(density>1) clockMarks(c,0,.25,.65,false,.65);
                     }
                 }
                 case TIME_SKIP -> {
@@ -238,14 +246,15 @@ public final class BuiltInAnimations {
                 case CLOCKWORK_FOOTSTEPS, BORROWED_FOOTSTEPS -> footsteps(pattern==Pattern.BORROWED_FOOTSTEPS);
                 case UNWINDING_SPRING -> {
                     double stretch=.08+.55*Math.sin(Math.PI*p), head=.12+p*.65;
-                    int n=Math.max(2,Math.min(100,f.budget()));
+                    int n=Math.max(2,Math.min(dense(100),f.budget()));
                     for(int i=0;i<n;i++) { double q=i/(double)(n-1), a=TAU*(q*6-p);
                         dot(Math.min(.9,head)+q*Math.min(stretch,1-head),Math.cos(a)*(.45-.3*p),.5+Math.sin(a)*(.45-.3*p),Math.sin(Math.PI*p)); }
                 }
                 case STEAM_BURSTS -> {
                     int n=count(24);
                     for(int i=0;i<n;i++) { double age=frac(p*2-i/(double)n);
-                        for(int j=0;j<24;j++) { double q=j/23.0,a=q*TAU*1.5;
+                        int points=dense(24);
+                        for(int j=0;j<points;j++) { double q=j/(double)(points-1),a=q*TAU*1.5;
                             dot(marker(i,n)+meters(age*.8+Math.cos(a)*q*.35),Math.sin(a)*q*.35,
                                     age*.9+q*1.1,fade(age)*fade(q*.6)); }
                     }
@@ -257,14 +266,15 @@ public final class BuiltInAnimations {
                         if(age<tail) dot(u(i),(noise(i)-.5)*age*3,noise(i+50)*age*2,Math.pow(fade(age/tail),3)); }
                 }
                 case ORBITING_GUIDE -> {
-                    int n=Math.max(2,Math.min(60,f.budget()/2));
+                    int n=Math.max(2,Math.min(dense(60),f.budget()/2));
                     for(int i=0;i<n;i++) { double q=i/(double)(n-1), a=TAU*(q*frequency-p);
                         for(int arm=0;arm<2;arm++) dot(q,Math.cos(a+arm*Math.PI)*.5,.65+Math.sin(a+arm*Math.PI)*.5,.65+.35*Math.sin(a)); }
                 }
                 case SHATTERED_SECONDS -> {
                     double gather=Math.sin(Math.PI*p), center=.25+.5*p;
                     double[][] outline=arrowOutline();
-                    for(int i=0;i<outline.length*4;i++) {int edge=i/4;double q=i%4/4.0;
+                    int points=dense(4);
+                    for(int i=0;i<outline.length*points;i++) {int edge=i/points;double q=(i%points)/(double)points;
                         double[] a=outline[edge],b=outline[(edge+1)%outline.length];
                         sink.emit(f.localPoint(center,(a[1]+(b[1]-a[1])*q)*shapeSize+(noise(i)-.5)*2*(1-gather),
                                 (a[0]+(b[0]-a[0])*q)*shapeSize+(noise(i+30)-.5)*2*(1-gather),
@@ -278,11 +288,11 @@ public final class BuiltInAnimations {
                 case INK_REVEAL -> {
                     int n=count(detail());
                     for(int i=0;i<n;i++) {double age=frac(p-i/(double)n);double[][] blob=circle(40);
-                        for(int j=0;j<blob.length;j++) {double r=.7+.3*Math.sin(j*1.7+i);blob[j][0]*=r;blob[j][1]*=r;}
+                        for(int j=0;j<blob.length;j++) {double a=TAU*j/blob.length,r=.7+.2*Math.sin(a*3+i)+.1*Math.sin(a*7);blob[j][0]*=r;blob[j][1]*=r;}
                         glyph(marker(i,n),.02,.15+age,fade(age),false,blob);}
                 }
                 case MECHANICAL_RELAY -> {
-                    int n=count(32);
+                    int n=count(density>1?56:32);
                     for(int i=0;i<n;i++) {double age=frac(p-i/(double)n);
                         gear(marker(i,n),.15,.65,TAU*age,.15+.85*Math.pow(fade(age),5));}
                 }
@@ -292,9 +302,11 @@ public final class BuiltInAnimations {
                         AnimationPoint rest=f.playerPosition().add((noise(i)-.5)*1.5*f.style().width()*f.style().scale(),
                                 (.6+noise(i+40))*f.style().height()*f.style().scale(),(noise(i+80)-.5)*1.5*f.style().width()*f.style().scale());
                         AnimationPoint position=age<.4?f.playerPosition().interpolate(rest,launch):rest.interpolate(f.point(.8,0,0),Math.pow((age-.4)/.6,2));
-                        for(int j=0;j<6;j++) {double a=TAU*j/6,r=j%2==0?.18:.045;
-                            sink.emit(position.add(Math.cos(a)*r*f.style().width()*f.style().scale(),
-                                    Math.sin(a)*r*f.style().height()*f.style().scale(),0),fade(age*.6),age);}
+                        int points=dense(6);
+                        for(int j=0;j<points;j++) {double edge=j*6.0/points;int k=(int)edge;double q=edge-k;
+                            double a=TAU*k/6,b=TAU*(k+1)/6,ra=k%2==0?.18:.045,rb=k%2==0?.045:.18;
+                            sink.emit(position.add((Math.cos(a)*ra*(1-q)+Math.cos(b)*rb*q)*f.style().width()*f.style().scale(),
+                                    (Math.sin(a)*ra*(1-q)+Math.sin(b)*rb*q)*f.style().height()*f.style().scale(),0),fade(age*.6),age);}
                     }
                 }
                 case CLOCKWORK_MOTH -> moth();
@@ -305,9 +317,14 @@ public final class BuiltInAnimations {
                 }
                 case POCKET_WATCH_SWING -> {
                     double side=Math.sin(TAU*p)*.8, c=.2+p*.6;
-                    for(int i=0;i<8;i++) dot(c,side*i/8.0,1.8-i*.14,.25);
-                    for(int i=0;i<18;i++) { double a=TAU*i/18; dot(c,side+Math.cos(a)*.3,.65+Math.sin(a)*.3,1); }
-                    for(int i=0;i<6;i++) {double r=i*.04;dot(c,side+Math.sin(TAU*p)*r,.65+Math.cos(TAU*p)*r,1);}
+                    for(int i=0;i<dense(8);i++) {double q=i/(double)dense(8);dot(c,side*q,1.8-q*1.12,.25);}
+                    for(int i=0;i<dense(18);i++) { double a=TAU*i/dense(18); dot(c,side+Math.cos(a)*.3,.65+Math.sin(a)*.3,1); }
+                    for(int i=0;i<dense(6);i++) {double r=i/(double)dense(6)*.24;dot(c,side+Math.sin(TAU*p)*r,.65+Math.cos(TAU*p)*r,1);}
+                    if(density>1) {
+                        clockMarks(c,side,.65,.3/shapeSize,true,.7);
+                        symbol(c,side,1.01,.08,0,true,.8,8,true,new double[][]{{-1,-.5},{1,-.5},{1,.5},{-1,.5}});
+                        symbol(c,side,.65,.18,TAU*p/12,true,1,6,false,new double[][]{{0,0},{0,1}});
+                    }
                 }
                 case MECHANICAL_FIREFLIES -> {
                     double spread=.15+Math.pow(Math.cos(Math.PI*p),2), c=.2+p*.65;
@@ -327,7 +344,7 @@ public final class BuiltInAnimations {
                     int n=count(36);
                     for(int i=0;i<n;i++) {double c=marker(i,n);
                         symbol(c,0,.8,.85,0,true,.55,24,true,new double[][]{{-.55,1},{.55,1},{.1,0},{.55,-1},{-.55,-1},{-.1,0}});
-                        for(int j=0;j<10;j++) {double age=frac(p+i*.2+j*.1);
+                        for(int j=0;j<dense(10);j++) {double age=frac(p+i*.2+j/(double)dense(10));
                             dot(c,(noise(j)-.5)*Math.abs(1-age*2)*.5,1.5*(1-age),.9);}
                     }
                 }
@@ -358,7 +375,7 @@ public final class BuiltInAnimations {
                                 new double[][]{{-.65,0},{-.3,0},{-.3,.2+lift*.7},{.3,.2+lift*.7},{.3,0},{.65,0}});}
                 }
                 case REWINDING_RIBBON -> {
-                    int n=Math.max(2,Math.min(60,f.budget()/2));
+                    int n=Math.max(2,Math.min(dense(60),f.budget()/2));
                     for(int i=0;i<n;i++) { double q=i/(double)(n-1), unwind=p<.5?0:(p-.5)*2;
                         double c=p<.5?.55-q*.25*p:.3+q*unwind*.65;
                         for(int edge:new int[]{-1,1}) dot(c,Math.sin(q*TAU*3-p*TAU)*.5*(1-unwind)+edge*.08,
@@ -416,20 +433,51 @@ public final class BuiltInAnimations {
                 guide=f.path().at(Math.min(ahead,f.path().length())); f.state().put("moth-guide",guide);
             }
             double flap=Math.sin(t*TAU*8), orbit=t*TAU;
-            for(int side:new int[]{-1,1}) for(int i=0;i<24;i++) { double a=TAU*i/24;
+            for(int side:new int[]{-1,1}) for(int i=0;i<dense(24);i++) { double a=TAU*i/dense(24);
                 double wing=side*(.12+.65*Math.sin(a/2)),along=Math.sin(a)*.4;
                 sink.emit(guide.add((Math.cos(orbit)*.2+wing)*f.style().width()*f.style().scale()*shapeSize,
                         (.9+Math.abs(wing)*flap*.5)*f.style().height()*f.style().scale(),
-                        (Math.sin(orbit)*.2+along)*f.style().width()*f.style().scale()*shapeSize),.9,i/24.0);
+                        (Math.sin(orbit)*.2+along)*f.style().width()*f.style().scale()*shapeSize),.9,i/(double)dense(24));
             }
-            for(int i=0;i<8;i++) sink.emit(guide.add(Math.cos(orbit)*.2*f.style().width()*f.style().scale()*shapeSize,
-                    .9*f.style().height()*f.style().scale(),(Math.sin(orbit)*.2+(i-3.5)*.1)*f.style().width()*f.style().scale()*shapeSize),1,.5);
+            for(int i=0;i<dense(8);i++) sink.emit(guide.add(Math.cos(orbit)*.2*f.style().width()*f.style().scale()*shapeSize,
+                    .9*f.style().height()*f.style().scale(),(Math.sin(orbit)*.2+(i/(double)(dense(8)-1)-.5)*.7)*f.style().width()*f.style().scale()*shapeSize),1,.5);
+            if(density>1) for(int side:new int[]{-1,1}) for(int vein=1;vein<=5;vein++) {
+                double a=TAU*vein/6;
+                for(int i=0;i<dense(3);i++) {double q=i/(double)(dense(3)-1),wing=side*(.12+.65*Math.sin(a/2))*q;
+                    sink.emit(guide.add((Math.cos(orbit)*.2+wing)*f.style().width()*f.style().scale()*shapeSize,
+                            (.9+Math.abs(wing)*flap*.5)*f.style().height()*f.style().scale(),
+                            (Math.sin(orbit)*.2+Math.sin(a)*.4*q)*f.style().width()*f.style().scale()*shapeSize),.45,.5);}
+            }
+        }
+
+        void clockMarks(double center,double side,double up,double radius,boolean upright,double light) {
+            for(int i=0;i<12;i++) symbol(center,side,up,radius,i*TAU/12,upright,light,2,false,
+                    new double[][]{{0,i%3==0?.7:.82},{0,1}});
         }
 
         void bodyLine(List<AnimationPoint> points,double center,double[] a,double[] b,int count) {
+            count=dense(count);
             for(int i=0;i<count;i++) {double q=i/(double)(count-1);
                 points.add(f.localPoint(center,(a[0]+(b[0]-a[0])*q)*shapeSize,
                         (a[1]+(b[1]-a[1])*q)*shapeSize,(a[2]+(b[2]-a[2])*q)*shapeSize));}
+        }
+
+        void bodyPanel(List<AnimationPoint> points,double center,double[] origin,double[] right,double[] up) {
+            int grid=(int)Math.ceil(2*Math.sqrt(density));
+            for(int i=1;i<grid;i++)for(int j=1;j<grid;j++) {
+                double x=i/(double)grid,y=j/(double)grid;
+                points.add(f.localPoint(center,(origin[0]+right[0]*x+up[0]*y)*shapeSize,
+                        (origin[1]+right[1]*x+up[1]*y)*shapeSize,(origin[2]+right[2]*x+up[2]*y)*shapeSize));
+            }
+        }
+        void limb(List<AnimationPoint> points,double center,double[] a,double[] b,int detail,double radius) {
+            if(density<=1) {bodyLine(points,center,a,b,detail);return;}
+            int steps=dense(2);double dx=b[0]-a[0],dy=b[2]-a[2],length=Math.max(.001,Math.hypot(dx,dy));
+            for(int i=0;i<steps;i++)for(int j=0;j<4;j++) {
+                double q=i/(double)(steps-1),angle=TAU*j/4,n=Math.sin(angle)*radius;
+                points.add(f.localPoint(center,(a[0]+dx*q-dy/length*n)*shapeSize,
+                        (a[1]+(b[1]-a[1])*q+Math.cos(angle)*radius)*shapeSize,(a[2]+dy*q+dx/length*n)*shapeSize));
+            }
         }
 
         void walkingGhost() {
@@ -450,12 +498,18 @@ public final class BuiltInAnimations {
                 double[][] torso={{forward,-.27,1.42},{forward,.27,1.42},{forward,.2,.84},{forward,-.2,.84}};
                 for(int i=0;i<4;i++)bodyLine(body,center,torso[i],torso[(i+1)%4],3);
             }
+            if(density>1) {
+                for(double forward:new double[]{-.21,.21})bodyPanel(body,center,new double[]{forward,-.23,1.48},new double[]{0,.46,0},new double[]{0,0,.42});
+                for(double side:new double[]{-.23,.23})bodyPanel(body,center,new double[]{-.21,side,1.48},new double[]{.42,0,0},new double[]{0,0,.42});
+                for(double height:new double[]{1.48,1.9})bodyPanel(body,center,new double[]{-.21,-.23,height},new double[]{.42,0,0},new double[]{0,.46,0});
+                for(double forward:new double[]{-.13,.13})bodyPanel(body,center,new double[]{forward,-.2,.84},new double[]{0,.4,0},new double[]{0,0,.58});
+            }
             for(int side:new int[]{-1,1}) {
                 double swing=Math.sin(gait+ (side==1?0:Math.PI))*stride,lift=Math.max(0,swing)*.45;
                 double[] hip={0,side*.16,.84},knee={swing*.55,side*.17,.43+lift},foot={swing,side*.18,.06+lift};
-                bodyLine(body,center,hip,knee,5);bodyLine(body,center,knee,foot,5);
+                limb(body,center,hip,knee,5,.105);limb(body,center,knee,foot,5,.105);
                 double[] shoulder={0,side*.32,1.35},elbow={-swing*.55,side*.36,1.08},hand={-swing,side*.36,.85};
-                bodyLine(body,center,shoulder,elbow,4);bodyLine(body,center,elbow,hand,4);
+                limb(body,center,shoulder,elbow,4,.085);limb(body,center,elbow,hand,4,.085);
             }
             // Black dust cannot fade by getting darker: dissolve the silhouette's density too.
             double opacity=Math.min(1,p/.08)*Math.pow(1-p,.65);
@@ -478,9 +532,13 @@ public final class BuiltInAnimations {
                 double[][] outline=shoe(side);
                 for(int i=0;i<outline.length;i++) {
                     double[] a=outline[i],b=outline[(i+1)%outline.length];
-                    for(int j=0;j<2;j++) {double q=j/2.0;
+                    for(int j=0;j<dense(2);j++) {double q=j/(double)dense(2);
                         points.add(f.localPoint(center,(a[1]+(b[1]-a[1])*q)*shapeSize,
                                 side*.35+(a[0]+(b[0]-a[0])*q)*shapeSize,0));}
+                }
+                if(density>1) for(int row=0;row<5;row++)for(int j=0;j<dense(2);j++) {
+                    double forward=-.3+row*.15,lateral=-.12+j/(double)(dense(2)-1)*.24;
+                    points.add(f.localPoint(center,forward*shapeSize,side*.35+lateral*shapeSize,0));
                 }
                 feet.add(new Foot(List.copyOf(points),f.elapsedSeconds(),number));
             }

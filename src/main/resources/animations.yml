@@ -26,6 +26,8 @@ style:
     # Outline size and samples for symbol-based effects. Width/height/scale affect all geometry.
     shape-size: 0.85
     shape-points: 24
+    # Multiplies contour/curve samples across all 47 effects; respects the rendering budget.
+    detail-multiplier: 6.0
 
 # Each pattern inherits style above. Override any style key or parameter per pattern.
 # Custom animation profiles may be added here as 'myplugin:my-animation': {...}.

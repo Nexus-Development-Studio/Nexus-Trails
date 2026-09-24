@@ -5,7 +5,9 @@ render:
   particle-spacing: 0.8
   min-ahead: 2.0
   max-ahead: 20.0
-  max-particles-per-update: 120
+  # Per player, per update. Shape detail scales down when this is reduced (maximum 6000).
+  max-particles-per-update: 1200
+  detail-version: 1
   timeout-seconds: 180
   # Legacy setting retained for config compatibility. Particle appearance and TRAIL duration
   # are now controlled by animations.yml (style.duration-ticks).

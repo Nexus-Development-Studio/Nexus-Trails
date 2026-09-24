@@ -6,7 +6,7 @@ Standalone personal particle navigation, extracted from NexusRegionManager's tra
 
 ## Install
 
-1. Put `nexustrails-1.4.0.jar` in the server's `plugins` folder.
+1. Put `nexustrails-1.4.1.jar` in the server's `plugins` folder.
 2. Start/restart the server. Settings appear in `plugins/NexusTrails/config.yml`.
 3. As an operator, create a destination using one of the examples below.
 
@@ -74,7 +74,9 @@ destinations:
 
 Edit the file while the server is stopped, or run `/trail reload` after edits. Keep a backup when editing routes manually. Invalid route data fails loading instead of replacing the current in-memory routes.
 
-The config controls particle spacing, look-ahead distance, height above recorded feet positions, update rate, particle budget, trail timeout, arrival radius, and recording limits. Defaults render up to 120 particles per update every 6 ticks, with a 20-block look-ahead and 180-second timeout. Values are bounded to prevent zero-spacing loops and excessive configured budgets.
+The config controls particle spacing, look-ahead distance, height above recorded feet positions, update rate, particle budget, trail timeout, arrival radius, and recording limits. Defaults allow up to 1,200 particles per player per update every 6 ticks, with a 20-block look-ahead and 180-second timeout. The configurable budget accepts 6–6,000 particles. All 47 built-ins use `animations.yml`'s `style.parameters.detail-multiplier` (default 6) to add contour, curve and model samples, scaling detail down for smaller budgets. Extra detail includes clock markings, gear hubs, moth wing veins, shoe treads and a surfaced ghost head/torso with thicker moving limbs.
+
+On the first upgrade to 1.4.1, the old stock budget of 120 becomes 1,200 automatically. Other configured budgets are kept. `render.detail-version: 1` records that migration; subsequent edits to the budget are respected. Colors, animation selections and saved routes are preserved.
 
 Trails continue after teleporting and rejoin the original route from the player's new position. Moving to another world pauses particles until the player returns to the destination's world; the existing timeout still applies and is not reset by teleporting. Recording also continues through same-world teleports, subject to the point limit. Trails stop on arrival, timeout, death, disconnect, plugin disable or explicit cancellation. Reloading stops ordinary trails. Tracing never loads chunks or changes blocks. The plugin does not create destinations automatically from NRM plots; it runs independently and does not alter NRM's existing trail feature.
 
@@ -121,7 +123,7 @@ Record a route normally, use the elevator, then keep walking and save. Nexus Tra
 
 [Simple Elevators](https://www.spigotmc.org/resources/simple-elevators-1-8-26-2.44462/) uses Space to go up and Shift to go down. Nexus Trails relies on the resulting normal teleport event, so no Simple Elevators dependency or special config is required. Live compatibility with the installed elevator build should still be checked on a server.
 
-For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.4.0 and restart; the new `animations.yml` is created automatically.
+For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.4.1 and restart; the new `animations.yml` is created automatically.
 
 ### Console commands
 
@@ -177,7 +179,7 @@ The `api` classifier JAR contains only the public interface. Run `mvn install` l
 <dependency>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.4.0</version>
+  <version>1.4.1</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>

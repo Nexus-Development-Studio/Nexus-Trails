@@ -10,6 +10,25 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BuiltInAnimationsTest {
+    static final int HIGH_BUDGET=1200;
+    @TestFactory Stream<DynamicTest> everyEffectUsesExtraBudgetForMoreDistinctGeometry() throws Exception {
+        var config=config();
+        return BuiltInAnimations.all().entrySet().stream().map(entry->DynamicTest.dynamicTest(entry.getKey()+" detail",()->{
+            var style=config.style(entry.getKey());Map<String,Object> lowState=new HashMap<>(),highState=new HashMap<>();
+            long low=0,high=0;
+            for(int i=0;i<24;i++) {
+                Capture sparse=new Capture(120),dense=new Capture(HIGH_BUDGET);double seconds=style.periodSeconds()*i/24;
+                entry.getValue().render(frame(style,seconds,120,lowState),sparse);
+                entry.getValue().render(frame(style,seconds,HIGH_BUDGET,highState),dense);
+                low+=distinctPositions(sparse);high+=distinctPositions(dense);
+                assertTrue(sparse.points.size()<=120);assertTrue(dense.points.size()<=HIGH_BUDGET);
+            }
+            assertTrue(high>low*2,"Higher detail must add new positions, not duplicate particles: "+low+" -> "+high);
+        }));
+    }
+    private static long distinctPositions(Capture capture) {
+        return capture.points.stream().map(v->String.format(Locale.ROOT,"%.4f,%.4f,%.4f",v[0],v[1],v[2])).distinct().count();
+    }
     static AnimationConfig config() throws Exception {
         var cfg=new YamlConfiguration();cfg.load("src/main/resources/animations.yml");return AnimationConfig.read(cfg);
     }
@@ -41,9 +60,9 @@ class BuiltInAnimationsTest {
             AnimationStyle style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();
             Set<String> frames=new HashSet<>();int emitted=0;
             for(int i=0;i<40;i++) {
-                Capture sink=new Capture(120);
-                entry.getValue().render(frame(style,style.periodSeconds()*i/40,120,state),sink);
-                assertTrue(sink.points.size()<=120);
+                Capture sink=new Capture(HIGH_BUDGET);
+                entry.getValue().render(frame(style,style.periodSeconds()*i/40,HIGH_BUDGET,state),sink);
+                assertTrue(sink.points.size()<=HIGH_BUDGET);
                 frames.add(sink.points.stream().map(Arrays::toString).toList().toString());emitted+=sink.points.size();
             }
             assertTrue(emitted>0,"Must produce a visible animation");
@@ -58,9 +77,9 @@ class BuiltInAnimationsTest {
         return BuiltInAnimations.all().entrySet().stream().map(entry->DynamicTest.dynamicTest(entry.getKey()+" shape",()->{
             var style=config.style(entry.getKey());boolean shaped=false;Map<String,Object> state=new HashMap<>();
             for(int i=1;i<24;i++) {
-                Capture sink=new Capture(120);
+                Capture sink=new Capture(HIGH_BUDGET);
                 entry.getValue().render(new AnimationFrame(new UUID(1,2),TrailKind.QUEST,"npc:11",straight,
-                        new AnimationPoint(0,64,0),style.periodSeconds()*i/24,73,.8,120,style,state),sink);
+                        new AnimationPoint(0,64,0),style.periodSeconds()*i/24,73,.8,HIGH_BUDGET,style,state),sink);
                 List<double[]> visible=sink.points.stream().filter(v->v[3]>.12).toList();
                 double lowZ=visible.stream().mapToDouble(v->v[2]).min().orElse(0),highZ=visible.stream().mapToDouble(v->v[2]).max().orElse(0);
                 double lowY=visible.stream().mapToDouble(v->v[1]).min().orElse(0),highY=visible.stream().mapToDouble(v->v[1]).max().orElse(0);
@@ -71,7 +90,7 @@ class BuiltInAnimationsTest {
     }
 
     @Test void rigidShapesKeepTheirDimensionsAtCornersAndEndpoints() throws Exception {
-        AnimationFrame frame=frame(config().common(),0,120,new HashMap<>());
+        AnimationFrame frame=frame(config().common(),0,HIGH_BUDGET,new HashMap<>());
         for(double progress:new double[]{0,.5,1}) {
             AnimationPoint a=frame.localPoint(progress,-1,0,0),b=frame.localPoint(progress,1,0,0);
             assertEquals(2*frame.style().width()*frame.style().scale(),Math.sqrt(a.distanceSquared(b)),1e-9);
@@ -82,10 +101,10 @@ class BuiltInAnimationsTest {
     @Test void walkingGhostHasDarkConfigMovesWalksAndDissolves() throws Exception {
         var ghost=BuiltInAnimations.all().get("nexustrails:walking-ghost");var style=config().style("nexustrails:walking-ghost");
         assertTrue(style.palette().stream().allMatch(c->c.getRed()<=24&&c.getGreen()<=24&&c.getBlue()<=24));
-        Capture early=new Capture(120),later=new Capture(120),end=new Capture(120);
-        ghost.render(frame(style,style.periodSeconds()*.125,120,new HashMap<>()),early);
-        ghost.render(frame(style,style.periodSeconds()*.1875,120,new HashMap<>()),later);
-        ghost.render(frame(style,style.periodSeconds()*.95,120,new HashMap<>()),end);
+        Capture early=new Capture(HIGH_BUDGET),later=new Capture(HIGH_BUDGET),end=new Capture(HIGH_BUDGET);
+        ghost.render(frame(style,style.periodSeconds()*.125,HIGH_BUDGET,new HashMap<>()),early);
+        ghost.render(frame(style,style.periodSeconds()*.1875,HIGH_BUDGET,new HashMap<>()),later);
+        ghost.render(frame(style,style.periodSeconds()*.95,HIGH_BUDGET,new HashMap<>()),end);
         assertTrue(early.points.stream().mapToDouble(v->v[1]).max().orElseThrow()>65.8,"Head reaches NPC height");
         assertTrue(later.points.stream().mapToDouble(v->v[0]).average().orElseThrow()>
                 early.points.stream().mapToDouble(v->v[0]).average().orElseThrow(),"Figure moves forward");
@@ -108,7 +127,7 @@ class BuiltInAnimationsTest {
                     .append(config.style(entry.getKey()).periodSeconds()).append(",\"frames\":[");
             StringBuilder signature=new StringBuilder();Map<String,Object> state=new HashMap<>();AnimationStyle style=config.style(entry.getKey());
             for(int i=0;i<48;i++) {
-                Capture capture=new Capture(120);entry.getValue().render(frame(style,style.periodSeconds()*i/48,120,state),capture);
+                Capture capture=new Capture(HIGH_BUDGET);entry.getValue().render(frame(style,style.periodSeconds()*i/48,HIGH_BUDGET,state),capture);
                 if(i>0)json.append(',');json.append('[');
                 for(int j=0;j<capture.points.size();j++) {
                     double[] p=capture.points.get(j);if(j>0)json.append(',');
@@ -139,7 +158,7 @@ class BuiltInAnimationsTest {
             g.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,15));g.drawString(entry.getKey().substring(12),x+14,y+22);
             var style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();Capture best=null;double energy=-1;
             for(int i=0;i<48;i++) {
-                Capture candidate=new Capture(120);entry.getValue().render(frame(style,style.periodSeconds()*i/48,120,state),candidate);
+                Capture candidate=new Capture(HIGH_BUDGET);entry.getValue().render(frame(style,style.periodSeconds()*i/48,HIGH_BUDGET,state),candidate);
                 double score=candidate.points.stream().mapToDouble(v->v[3]).sum();
                 if(score>energy){energy=score;best=candidate;}
             }
@@ -175,8 +194,8 @@ class BuiltInAnimationsTest {
         for(var entry:BuiltInAnimations.all().entrySet()) {
             int x=(index%columns)*cellWidth,y=(index/columns)*cellHeight;index++;
             g.setColor(new java.awt.Color(220,230,240));g.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,13));g.drawString(entry.getKey().substring(12),x+12,y+20);
-            Capture sink=new Capture(120);var style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();
-            for(int i=0;i<=15;i++){sink=new Capture(120);entry.getValue().render(frame(style,style.periodSeconds()*i/40,120,state),sink);}
+            Capture sink=new Capture(HIGH_BUDGET);var style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();
+            for(int i=0;i<=15;i++){sink=new Capture(HIGH_BUDGET);entry.getValue().render(frame(style,style.periodSeconds()*i/40,HIGH_BUDGET,state),sink);}
             for(double[] p:sink.points) {
                 int px=x+150+(int)((p[0]-p[2])*8),py=y+60+(int)((p[0]+p[2])*3.5-(p[1]-64)*20);
                 Color color=style.color(p[4],p[3]);g.setColor(new java.awt.Color(color.asRGB()));g.fillOval(px-2,py-2,4,4);
@@ -198,11 +217,11 @@ class BuiltInAnimationsTest {
     }
     @Test void mothWaitsInWorldSpaceUntilTheViewerApproaches() throws Exception {
         var moth=BuiltInAnimations.all().get("nexustrails:clockwork-moth");var style=config().common();Map<String,Object> state=new HashMap<>();
-        moth.render(frame(style,0,120,state),new Capture(120));Object first=state.get("moth-guide");
-        moth.render(frame(style,1,120,state),new Capture(120));assertEquals(first,state.get("moth-guide"));
+        moth.render(frame(style,0,HIGH_BUDGET,state),new Capture(HIGH_BUDGET));Object first=state.get("moth-guide");
+        moth.render(frame(style,1,HIGH_BUDGET,state),new Capture(HIGH_BUDGET));assertEquals(first,state.get("moth-guide"));
         AnimationPoint near=(AnimationPoint)first;
         AnimationPath advanced=new AnimationPath(List.of(near,new AnimationPoint(10,64,10)));
-        moth.render(new AnimationFrame(new UUID(1,2),TrailKind.QUEST,"npc:11",advanced,near,2,73,.8,120,style,state),new Capture(120));
+        moth.render(new AnimationFrame(new UUID(1,2),TrailKind.QUEST,"npc:11",advanced,near,2,73,.8,HIGH_BUDGET,style,state),new Capture(HIGH_BUDGET));
         assertNotEquals(first,state.get("moth-guide"));
     }
 }

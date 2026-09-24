@@ -1,6 +1,6 @@
 # Trail animations
 
-Nexus Trails 1.4.0 gives each of the original 46 effects its own particle shape and adds `walking-ghost`, for 47 effects total. Hearts, stars, chevrons, clock faces, shoe outlines, hourglasses, gears, door leaves and humanoid figures move along the route. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
+Nexus Trails 1.4.1 gives each of the original 46 effects its own particle shape and adds `walking-ghost`, for 47 effects total. Hearts, stars, chevrons, clock faces, shoe outlines, hourglasses, gears, door leaves and humanoid figures move along the route. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
 
 ## Server configuration and commands
 
@@ -29,6 +29,7 @@ style:
     look-ahead: 5.0
     shape-size: 0.85
     shape-points: 24
+    detail-multiplier: 6.0
 patterns:
   comet:
     palette: ['#FF8800', '#FFF0B3']
@@ -67,7 +68,9 @@ Particle types `DUST`, `DUST_COLOR_TRANSITION` and `TRAIL` support the configura
 
 `render.update-interval-ticks`, `render.particle-spacing`, `render.max-particles-per-update`, `render.max-ahead` and `render.height-offset` still come from `config.yml`. Lower update intervals make fast effects smoother at a higher rendering cost. Large effects are reduced by the per-frame particle budget. Width/height/scale affect decorative geometry around the already validated route; those decorative offsets are not themselves navigation or collision checks.
 
-Each animation ID selects its own shape and motion together. `parameters.shape-size` scales symbol outlines, and `parameters.shape-points` controls their contour detail (12–64, default 24). Width/height/scale remain available for all geometry. Outlines render before the optional dim centerline, so the baseline cannot consume their particle budget. Rigid symbols retain their shape at corners and endpoints.
+Each animation ID selects its own shape and motion together. `parameters.shape-size` scales symbol outlines, and `parameters.shape-points` controls their base contour detail (12–256, default 24). `parameters.detail-multiplier` (1–12, default 6) multiplies samples across all 47 effects, including fixed outlines, curves, footprints and humanoid models. With the default multiplier a 24-point contour requests 144 distinct positions. `ring-points` accepts 6–128 base samples. Width/height/scale remain available for all geometry. Outlines render before the optional dim centerline, so the baseline cannot consume their particle budget. Rigid symbols retain their shape at corners and endpoints.
+
+The default budget is now 1,200 particles per viewer per update, configurable up to 6,000 in `config.yml`. Detail adapts down when a smaller budget is selected. Upgrading replaces the old stock 120 budget with 1,200 once, records `render.detail-version: 1`, and preserves other configured budgets. The new multiplier is added to existing `animations.yml` files without changing palettes or saved player selections. Set a per-pattern multiplier to tune individual effects. Additional samples trace real new positions, rather than stacking copies at the same coordinate. Clocks gain dial markings, gears gain hubs/spokes, moth wings gain veins, footprints gain treads, and the walking ghost gains filled head/torso surfaces and thicker limbs.
 
 `walking-ghost` is a private particle humanoid, not a spawned Citizens NPC. Its cuboid head and torso face the route while opposing arms and legs swing through a walking gait. The figure advances and dissolves, then reforms ahead. Black particles fade through decreasing emission density as well as brightness. Its default dark palette is configurable:
 
@@ -149,7 +152,7 @@ The end of the currently visible walking section is the animation's forward dire
 
 ## API selection
 
-Use the `nexustrails` **1.4.0** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
+Use the `nexustrails` **1.4.1** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
 
 ```java
 import cc.nexusdev.trails.api.animation.TrailAnimationAPI;
