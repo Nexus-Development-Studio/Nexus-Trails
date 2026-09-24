@@ -35,7 +35,7 @@ class BuiltInAnimationsTest {
 
     @TestFactory Stream<DynamicTest> everyRequestedPatternAnimatesAcrossItsCycleWithinBudget() throws Exception {
         AnimationConfig config=config();
-        assertEquals(46,BuiltInAnimations.all().size());
+        assertEquals(47,BuiltInAnimations.all().size());
         assertEquals(BuiltInAnimations.all().keySet(),config.profiles().keySet());
         return BuiltInAnimations.all().entrySet().stream().map(entry->DynamicTest.dynamicTest(entry.getKey(),()->{
             AnimationStyle style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();
@@ -50,6 +50,55 @@ class BuiltInAnimationsTest {
             assertTrue(frames.size()>=3,"Must change throughout its cycle (theater chase has three steps)");
             Capture tiny=new Capture(6);entry.getValue().render(frame(style,.4,6,new HashMap<>()),tiny);assertTrue(tiny.points.size()<=6);
         }));
+    }
+
+    @TestFactory Stream<DynamicTest> everyEffectDrawsAShapeBeyondTheRouteCenterline() throws Exception {
+        AnimationConfig config=config();
+        AnimationPath straight=new AnimationPath(List.of(new AnimationPoint(0,64,0),new AnimationPoint(20,64,0)));
+        return BuiltInAnimations.all().entrySet().stream().map(entry->DynamicTest.dynamicTest(entry.getKey()+" shape",()->{
+            var style=config.style(entry.getKey());boolean shaped=false;Map<String,Object> state=new HashMap<>();
+            for(int i=1;i<24;i++) {
+                Capture sink=new Capture(120);
+                entry.getValue().render(new AnimationFrame(new UUID(1,2),TrailKind.QUEST,"npc:11",straight,
+                        new AnimationPoint(0,64,0),style.periodSeconds()*i/24,73,.8,120,style,state),sink);
+                List<double[]> visible=sink.points.stream().filter(v->v[3]>.12).toList();
+                double lowZ=visible.stream().mapToDouble(v->v[2]).min().orElse(0),highZ=visible.stream().mapToDouble(v->v[2]).max().orElse(0);
+                double lowY=visible.stream().mapToDouble(v->v[1]).min().orElse(0),highY=visible.stream().mapToDouble(v->v[1]).max().orElse(0);
+                if(visible.size()>=8 && (highZ-lowZ>.15 || highY-lowY>.15)) shaped=true;
+            }
+            assertTrue(shaped,"A brightness-only centerline does not count as a shape");
+        }));
+    }
+
+    @Test void rigidShapesKeepTheirDimensionsAtCornersAndEndpoints() throws Exception {
+        AnimationFrame frame=frame(config().common(),0,120,new HashMap<>());
+        for(double progress:new double[]{0,.5,1}) {
+            AnimationPoint a=frame.localPoint(progress,-1,0,0),b=frame.localPoint(progress,1,0,0);
+            assertEquals(2*frame.style().width()*frame.style().scale(),Math.sqrt(a.distanceSquared(b)),1e-9);
+            assertEquals(frame.path().at(progress*frame.path().length()),a.interpolate(b,.5));
+        }
+    }
+
+    @Test void walkingGhostHasDarkConfigMovesWalksAndDissolves() throws Exception {
+        var ghost=BuiltInAnimations.all().get("nexustrails:walking-ghost");var style=config().style("nexustrails:walking-ghost");
+        assertTrue(style.palette().stream().allMatch(c->c.getRed()<=24&&c.getGreen()<=24&&c.getBlue()<=24));
+        Capture early=new Capture(120),later=new Capture(120),end=new Capture(120);
+        ghost.render(frame(style,style.periodSeconds()*.125,120,new HashMap<>()),early);
+        ghost.render(frame(style,style.periodSeconds()*.1875,120,new HashMap<>()),later);
+        ghost.render(frame(style,style.periodSeconds()*.95,120,new HashMap<>()),end);
+        assertTrue(early.points.stream().mapToDouble(v->v[1]).max().orElseThrow()>65.8,"Head reaches NPC height");
+        assertTrue(later.points.stream().mapToDouble(v->v[0]).average().orElseThrow()>
+                early.points.stream().mapToDouble(v->v[0]).average().orElseThrow(),"Figure moves forward");
+        double earlyFeet=spanX(early.points.stream().filter(v->v[1]<64.3).toList());
+        double laterFeet=spanX(later.points.stream().filter(v->v[1]<64.3).toList());
+        assertTrue(laterFeet>earlyFeet+.1,"Legs change pose rather than sliding as a rigid figure");
+        assertTrue(end.points.size()<early.points.size()/2,"Black particles must dissolve through density as well as brightness");
+        // Changing the palette must recolor this effect; black is a configuration default only.
+        var red=style.withPalette(List.of(Color.RED));
+        assertEquals(Color.RED,red.color(.5,1));
+    }
+    private static double spanX(List<double[]> points) {
+        return points.stream().mapToDouble(v->v[0]).max().orElse(0)-points.stream().mapToDouble(v->v[0]).min().orElse(0);
     }
 
     @Test void allPatternsHaveDistinctTracesAndExportPreviewFrames() throws Exception {
@@ -74,6 +123,47 @@ class BuiltInAnimationsTest {
         json.append(']');Files.createDirectories(Path.of("target"));Files.writeString(Path.of("target/animation-preview.json"),json);
         Files.writeString(Path.of("target/animation-preview.html"),Files.readString(Path.of("src/test/resources/animation-preview.html")).replace("__FRAMES__",json));
         atlas(config);
+        shapeAtlas(config);
+    }
+
+    private static void shapeAtlas(AnimationConfig config) throws Exception {
+        int columns=4,cellWidth=400,cellHeight=250;
+        var image=new java.awt.image.BufferedImage(columns*cellWidth,12*cellHeight,java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var g=image.createGraphics();g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        int index=0;
+        for(var entry:BuiltInAnimations.all().entrySet()) {
+            int x=index%columns*cellWidth,y=index/columns*cellHeight;index++;
+            boolean ghost=entry.getKey().endsWith(":walking-ghost");
+            g.setColor(new java.awt.Color(ghost?0xB8C9BD:0x101821));g.fillRect(x,y,cellWidth,cellHeight);
+            g.setColor(new java.awt.Color(ghost?0x182825:0xDCE6F0));
+            g.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,15));g.drawString(entry.getKey().substring(12),x+14,y+22);
+            var style=config.style(entry.getKey());Map<String,Object> state=new HashMap<>();Capture best=null;double energy=-1;
+            for(int i=0;i<48;i++) {
+                Capture candidate=new Capture(120);entry.getValue().render(frame(style,style.periodSeconds()*i/48,120,state),candidate);
+                double score=candidate.points.stream().mapToDouble(v->v[3]).sum();
+                if(score>energy){energy=score;best=candidate;}
+            }
+            List<double[]> points=best.points.stream().filter(v->v[3]>.1).toList();
+            double[] focus=focus(points);
+            var child=(java.awt.Graphics2D)g.create(x,y+30,cellWidth,cellHeight-30);
+            for(double[] point:points) {
+                double dx=point[0]-focus[0],dz=point[2]-focus[2];
+                if(Math.hypot(dx,dz)>2.3)continue;
+                double px=cellWidth/2.0+(dx-dz)*55,py=cellHeight-90+(dx+dz)*24-(point[1]-64)*65;
+                child.setColor(new java.awt.Color(style.color(point[4],point[3]).asRGB()));
+                child.fill(new java.awt.geom.Ellipse2D.Double(px-2,py-2,4,4));
+            }
+            child.dispose();
+        }
+        g.dispose();javax.imageio.ImageIO.write(image,"png",Path.of("target/animation-shapes.png").toFile());
+    }
+    private static double[] focus(List<double[]> points) {
+        double[] best={0,64,0};double score=-1;
+        for(double[] candidate:points) {
+            double energy=points.stream().filter(v->Math.hypot(v[0]-candidate[0],v[2]-candidate[2])<1.2).mapToDouble(v->v[3]).sum();
+            if(energy>score){score=energy;best=candidate;}
+        }
+        return best;
     }
 
     private static void atlas(AnimationConfig config) throws Exception {

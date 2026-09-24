@@ -23,6 +23,9 @@ style:
     origin: 0.0
     wait-distance: 3.0
     look-ahead: 5.0
+    # Outline size and samples for symbol-based effects. Width/height/scale affect all geometry.
+    shape-size: 0.85
+    shape-points: 24
 
 # Each pattern inherits style above. Override any style key or parameter per pattern.
 # Custom animation profiles may be added here as 'myplugin:my-animation': {...}.
@@ -122,3 +125,17 @@ patterns:
     period-seconds: 4.0
   second-hand-sweep:
     period-seconds: 6.0
+  walking-ghost:
+    particle: DUST
+    palette: ['#050506', '#141418', '#050506']
+    period-seconds: 6.0
+    width: 1.0
+    height: 1.0
+    size: 0.45
+    base-brightness: 0.0
+    parameters:
+      shape-size: 1.0
+      look-ahead: 2.0
+      ghost-distance: 8.0
+      gait-cycles: 4.0
+      stride: 0.38

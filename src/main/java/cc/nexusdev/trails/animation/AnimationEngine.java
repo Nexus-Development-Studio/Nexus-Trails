@@ -3,6 +3,7 @@ package cc.nexusdev.trails.animation;
 import cc.nexusdev.trails.api.animation.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
@@ -47,16 +48,28 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         YamlConfiguration cfg=new YamlConfiguration();
         try {
             cfg.load(file);
+            boolean missingDefaults;
             try(var input=Objects.requireNonNull(plugin.getResource("animations.yml"))) {
-                cfg.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(input,StandardCharsets.UTF_8)));
+                YamlConfiguration defaults=YamlConfiguration.loadConfiguration(new InputStreamReader(input,StandardCharsets.UTF_8));
+                missingDefaults=defaults.getKeys(true).stream().anyMatch(key->!cfg.contains(key,true));
+                cfg.setDefaults(defaults);
             }
             cfg.options().copyDefaults(true);
             AnimationConfig next=AnimationConfig.read(cfg);
             if(!registry.containsKey(next.fallback())||registry.get(next.fallback()).owner!=plugin)
                 throw new IllegalArgumentException("Fallback must be a built-in animation: "+next.fallback());
+            if(missingDefaults) saveDefaults(cfg,file);
             config=next;
             states.clear();
         } catch(Exception ex) { throw new IllegalArgumentException("Could not load animations.yml: "+ex.getMessage(),ex); }
+    }
+    private static void saveDefaults(YamlConfiguration cfg,File file) throws IOException {
+        Path target=file.toPath(),temporary=Files.createTempFile(target.getParent(),"animations-",".tmp");
+        try {
+            Files.writeString(temporary,cfg.saveToString(),StandardCharsets.UTF_8);
+            try {Files.move(temporary,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
+            catch(AtomicMoveNotSupportedException ex) {Files.move(temporary,target,StandardCopyOption.REPLACE_EXISTING);}
+        } finally {Files.deleteIfExists(temporary);}
     }
     public static String id(String value) {
         String id=Objects.requireNonNull(value).trim().toLowerCase(Locale.ROOT).replace('_','-');

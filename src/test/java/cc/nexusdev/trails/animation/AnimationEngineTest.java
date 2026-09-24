@@ -36,6 +36,19 @@ class AnimationEngineTest {
     @AfterEach void close() {engine.shutdown();bukkit.close();}
     void render(double seconds) {engine.render(viewer,TrailKind.QUEST,"npc:11",BuiltInAnimationsTest.path(),seconds,.8,12);}
 
+    @Test void upgradeAddsShapeSettingsAndGhostProfileWithoutReplacingCustomValues() throws Exception {
+        Path file=directory.resolve("animations.yml");
+        var yaml=new org.bukkit.configuration.file.YamlConfiguration();yaml.load(file.toFile());
+        yaml.set("patterns.walking-ghost",null);yaml.set("style.parameters.shape-size",null);
+        yaml.set("style.palette",List.of("#AA3311"));yaml.set("patterns.comet.period-seconds",7.0);yaml.save(file.toFile());
+        engine.select(uuid,"clockwork-moth");engine.reload();yaml.load(file.toFile());
+        assertTrue(yaml.isConfigurationSection("patterns.walking-ghost"));
+        assertEquals(.85,yaml.getDouble("style.parameters.shape-size"));
+        assertEquals(List.of("#AA3311"),yaml.getStringList("style.palette"));
+        assertEquals(7.0,engine.style("comet").periodSeconds());
+        assertEquals("nexustrails:clockwork-moth",engine.selected(uuid));
+    }
+
     @Test void logoutKeepsPreferencesButClearsRenderState() {
         List<AnimationFrame> frames=new ArrayList<>();
         engine.register(extension,"example:state",(frame,sink)->frames.add(frame));

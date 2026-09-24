@@ -13,4 +13,19 @@ public record AnimationFrame(UUID playerId, TrailKind kind, String source, Anima
         return path.at(Math.clamp(progress,0,1)*path.length(), lateral*style.width()*style.scale(),
                 vertical*style.height()*style.scale());
     }
+    /**
+     * A rigid shape's local coordinates at a route position. Unlike point(), forward offsets
+     * use the anchor's heading, so outlines do not fold around corners or flatten at endpoints.
+     * Forward/lateral offsets use width and scale; vertical offsets use height and scale.
+     */
+    public AnimationPoint localPoint(double progress, double forward, double lateral, double vertical) {
+        double distance=Math.clamp(progress,0,1)*path.length();
+        AnimationPoint a=path.at(distance-.15), b=path.at(distance+.15);
+        double dx=b.x()-a.x(), dz=b.z()-a.z(), length=Math.hypot(dx,dz);
+        if(length<1e-8) { dx=0;dz=1;length=1; }
+        dx/=length;dz/=length;
+        double horizontal=style.width()*style.scale();
+        return path.at(distance).add((dx*forward-dz*lateral)*horizontal,
+                vertical*style.height()*style.scale(),(dz*forward+dx*lateral)*horizontal);
+    }
 }
