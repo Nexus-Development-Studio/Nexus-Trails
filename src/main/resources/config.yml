@@ -13,14 +13,16 @@ render:
 recording:
   point-spacing: 0.75
   max-points: 5000
-  # Larger movement is treated as a teleport; pause until recording is resumed.
+  # Larger non-teleport movement pauses recording; actual teleports are saved as transitions.
   max-step-distance: 8.0
 
 # Optional Paper-only Citizens / BeautyQuests integration.
 # Record routes with /trail record <id>, walk the road toward the NPC, /trail save.
-# Multiple routes per NPC can cover different approaches. No direct-line fallback.
+# Multiple routes per NPC can cover different approaches. Nearby terrain connects players to the route.
 quest-trails:
-  join-radius: 2.0
+  # Total A* node budget per connection attempt (bounded to 96-3072).
+  # Connections search loaded terrain up to 64 blocks at a time and refresh as the player moves.
+  connector-max-nodes: 768
   target-radius: 3.0
   npc-routes: {}
   # Example, after recording these routes:

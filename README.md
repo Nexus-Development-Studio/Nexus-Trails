@@ -6,7 +6,7 @@ Standalone personal particle navigation, extracted from NexusRegionManager's tra
 
 ## Install
 
-1. Put `nexustrails-1.1.1.jar` in the server's `plugins` folder.
+1. Put `nexustrails-1.2.0.jar` in the server's `plugins` folder.
 2. Start/restart the server. Settings appear in `plugins/NexusTrails/config.yml`.
 3. As an operator, create a destination using one of the examples below.
 
@@ -32,7 +32,7 @@ Stand at the start of a road/path:
 
 Walk the route on foot, then run `/trail save` at the destination. Players can now use `/trail market` from the same world. Their trail joins the closest segment and follows the recorded direction to the endpoint. The connection from the player to that segment is a straight line, so players should start near the recorded road. Avoid self-intersecting routes where possible.
 
-Use `/trail pause` and `/trail resume` for a break. Resume near the last recorded point. Same-world teleports keep recording and add the departure and destination points: the saved route connects the teleport gap with a straight segment, so use walking routes when guidance must avoid walls. Manually paused recordings remain paused. Changing worlds or flying interrupts recording; return to the route before resuming. `/trail cancel` discards only the unsaved recording. Unsaved recordings are discarded on disconnect/restart. Saved destinations survive restart.
+Use `/trail pause` and `/trail resume` for a break. Resume near the last recorded point. Same-world teleports keep recording and save a transition between the departure and destination points. Trails guide to the departure point, then continue on the other side after teleporting; they never draw a walking segment through the teleport gap. Manually paused recordings remain paused. Changing worlds or flying interrupts recording; return to the route before resuming. `/trail cancel` discards only the unsaved recording. Unsaved recordings are discarded on disconnect/restart. Saved destinations survive restart.
 
 ## Commands
 
@@ -94,7 +94,7 @@ Nexus Trails exposes private quest trails through Java and console commands. Not
 
 ```yaml
 quest-trails:
-  join-radius: 2.0
+  connector-max-nodes: 768
   target-radius: 3.0
   npc-routes:
     '11': [village-to-guide]
@@ -103,11 +103,21 @@ quest-trails:
   restore-rules: []
 ```
 
-Record every referenced route, then run `/trail reload`. These NPC IDs and route names are examples; replace them with your own. Multiple routes per NPC allow different starting areas. The shortest eligible route is selected. Routes are directional and must contain at least two points; `/trail set` waypoints are not sufficient for quest guidance.
+Record every referenced route, then run `/trail reload`. These NPC IDs and route names are examples; replace them with your own. Multiple routes per NPC allow different starting areas. The nearest route entrances are tried first, preferring a complete walkable connection. Routes are directional. A single `/trail set` waypoint can also be mapped; guidance then uses the bounded local walking search to approach it.
 
-Players must be within `join-radius` of the recorded road. The route endpoint must be within `target-radius` of the destination. Both radii are bounded to 0.5–8 blocks. There is no straight-line fallback if a route is missing or too far away. An NPC's live position is refreshed each render update; if it leaves the route endpoint's allowed radius, guidance pauses until it returns or a suitable route is configured.
+Players can receive guidance away from the recorded road. A show command/API call schedules its first render for the next server tick. A bounded walking search connects the player to a recorded section using loaded terrain, including detours around walls. The old `join-radius` setting is ignored. The route endpoint must still be within `target-radius` (0.5–8 blocks) of the destination. An NPC's live position is refreshed each render update; if it leaves that endpoint radius, configure an appropriate route or move it back.
 
-The visible route and its connector are checked for player-sized collision clearance in loaded chunks. A blocked corridor hides the trail until clear. This uses configured routes, **not automatic pathfinding**: it does not discover detours, validate ground support/hazards, or guarantee traversal of jumps, tight stairs and special blocks. Record clear walking routes and check them in game. Conservative clearance checks can pause trails on tightly recorded stairs; rerecord with enough clearance. Routes never teleport players or spawn NPCs.
+Connections search up to 64 blocks at a time, with a configurable total node budget of 96–3072 across up to three candidate entrances. The default is 768. A partial connection guides toward a distant route and refreshes as the player walks. Plans are cached for up to two seconds and invalidated after a teleport, route/config change, target movement or substantial deviation. This is a local connector, not unlimited world navigation: inaccessible or unloaded terrain, large mazes, special movement and hazards may require additional recorded approaches. It never loads chunks, spawns NPCs or teleports players. The connector checks collision clearance and supporting surfaces; it is not a hazard-avoidance system.
+
+Stair and slab samples are lifted to nearby step surfaces (up to approximately one block). A later obstruction truncates the displayed trail at that point instead of hiding the entire visible section. The trail still uses `render.max-ahead` (20 blocks by default) and the particle budget; it does not draw the entire route at once.
+
+### Elevators and existing recordings
+
+Record a route normally, use the elevator, then keep walking and save. Nexus Trails captures the same-world Bukkit teleport as an explicit transition, stored as destination point indices in `destinations.<id>.teleports`. Quest guidance marks the entrance and asks the player to use the elevator/teleport. It recalculates from the exit on the next tick. Standalone trails also stop drawing at the entrance and rejoin after teleporting.
+
+[Simple Elevators](https://www.spigotmc.org/resources/simple-elevators-1-8-26-2.44462/) uses Space to go up and Shift to go down. Nexus Trails relies on the resulting normal teleport event, so no Simple Elevators dependency or special config is required. Live compatibility with the installed elevator build should still be checked on a server.
+
+For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.2.0 and restart.
 
 ### Console commands
 
@@ -120,7 +130,7 @@ questtrail clear <player>
 questtrail status <player>
 ```
 
-Use an online player's exact name or UUID. Commands require `nexustrails.quest.admin` (operators and console by default). Normal players do not need that permission to receive guidance. Fixed locations select from `location-routes` using the same endpoint and join limits.
+Use an online player's exact name or UUID. Commands require `nexustrails.quest.admin` (operators and console by default). Normal players do not need that permission to receive guidance. Fixed locations select from `location-routes` using the same endpoint matching and walking connections.
 
 For BeautyQuests, choose **console** execution and use its player placeholder:
 
@@ -163,7 +173,7 @@ The `api` classifier JAR contains only the public interface. Run `mvn install` l
 <dependency>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.1.1</version>
+  <version>1.2.0</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>
@@ -192,4 +202,4 @@ One quest assignment exists per player; each show call replaces it. Calls made o
 
 ### Verification before deployment
 
-`mvn clean verify` builds both the server JAR and API JAR. Tests cover route corners and moving endpoints, unsafe joins, collision coordinates/low ceilings/fences, assignment replacement and copying, missing NPC/world recovery, unloaded chunks, console permissions, disconnect/shutdown cleanup, and restoration races. On a test Paper server, verify particle appearance, Citizens movement/despawn, BeautyQuests console actions and login restoration using real quest IDs before deploying to players.
+`mvn clean verify` builds both the server JAR and API JAR. Tests cover off-route guidance on the next tick, wall detours, distant partial connections, step surfaces, visible prefixes at obstructions, elevator entrances/exits, teleport persistence and legacy recordings, route corners and moving endpoints, collision coordinates/low ceilings/fences, assignment replacement, missing NPC/world recovery, unloaded chunks, console permissions, disconnect/shutdown cleanup, and restoration races. On a test Paper server, verify particle appearance, stairs, elevator movement, Citizens movement/despawn, BeautyQuests console actions and login restoration using real quest IDs before deploying to players.

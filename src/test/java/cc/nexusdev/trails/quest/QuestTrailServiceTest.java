@@ -9,6 +9,7 @@ import org.bukkit.block.Block;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.*;
 import org.bukkit.util.VoxelShape;
@@ -32,6 +33,7 @@ class QuestTrailServiceTest {
     private Runnable ticker;
     private final List<Runnable> delayed = new ArrayList<>();
     private QuestTrailService service;
+    private RouteStore store;
 
     @BeforeEach void setup() throws Exception {
         bukkit = mockStatic(Bukkit.class);
@@ -72,7 +74,7 @@ class QuestTrailServiceTest {
             when(task.getTaskId()).thenReturn(delayed.size());
             return task;
         });
-        RouteStore store = new RouteStore(directory.resolve("routes.yml"));
+        store = new RouteStore(directory.resolve("routes.yml"));
         store.save(new Route("road", "world", List.of(new Route.Point(.5, 64, .5), new Route.Point(10.5, 64, .5))));
         service = new QuestTrailService(plugin, store, () -> TrailSettings.read(config));
     }
@@ -188,5 +190,48 @@ class QuestTrailServiceTest {
             assertFalse(service.hasTrail(id));
             progress.verify(() -> BeautyQuestsProgress.destination(eq(player), anyList()), times(1));
         }
+    }
+
+    @Test void questCompletionAssignmentRendersOnNextTickFromFarOffRoute() {
+        World terrain = WalkingConnectorTest.flat();
+        when(terrain.getName()).thenReturn("world");
+        when(player.getWorld()).thenReturn(terrain);
+        when(player.getLocation()).thenReturn(new Location(terrain, -20.5, 64, .5));
+        service.showToLocation(id, new Location(terrain, 10.5, 64, .5));
+        ticker.run();
+        expectParticles();
+        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
+                argThat(p -> p.x() < -10), any(), anyDouble()), atLeastOnce());
+    }
+
+    @Test void obstructionAheadKeepsTheVisiblePrefix() {
+        Block wall = WalkingConnectorTest.shape(new org.bukkit.util.BoundingBox(0, 0, 0, 1, 1, 1));
+        for (int y = 64; y <= 67; y++) when(world.getBlockAt(7, y, 0)).thenReturn(wall);
+        service.showToLocation(id, destination());
+        ticker.run();
+        expectParticles();
+        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
+                argThat(p -> p.x() >= 7), any(), anyDouble()), never());
+    }
+
+    @Test void elevatorShowsEntranceThenResumesOnUpperFloorWithoutDrawingThroughFloor() throws Exception {
+        store.save(new Route("road", "world", List.of(new Route.Point(.5, 64, .5),
+                new Route.Point(5.5, 64, .5), new Route.Point(5.5, 84, .5),
+                new Route.Point(15.5, 84, .5)), List.of(2)));
+        service.showToLocation(id, new Location(world, 15.5, 84, .5));
+        ticker.run();
+        expectParticles();
+        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
+                argThat(p -> p.y() > 64.01), any(), anyDouble()), never());
+        particles.clearInvocations();
+        when(player.getLocation()).thenReturn(new Location(world, 5.5, 84, .5));
+        PlayerTeleportEvent teleport = mock(PlayerTeleportEvent.class);
+        when(teleport.getPlayer()).thenReturn(player);
+        service.onTeleport(teleport);
+        ticker.run();
+        expectParticles();
+        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
+                argThat(p -> p.y() < 83.99), any(), anyDouble()), never());
+        assertTrue(service.hasTrail(id));
     }
 }

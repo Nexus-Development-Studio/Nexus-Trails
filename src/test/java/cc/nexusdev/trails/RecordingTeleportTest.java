@@ -16,6 +16,7 @@ class RecordingTeleportTest {
         assertEquals(CONTINUED, rec.teleport("world", p(.5), p(100), 5000));
         assertFalse(rec.paused);
         assertEquals(List.of(p(0), p(.5), p(100)), rec.points);
+        assertEquals(List.of(2), rec.teleports);
         assertEquals(0, rec.points.getLast().distanceSquared(p(100)));
     }
 
@@ -24,6 +25,7 @@ class RecordingTeleportTest {
         rec.paused = true;
         assertEquals(ALREADY_PAUSED, rec.teleport("world", p(0), p(100), 5000));
         assertEquals(List.of(p(0)), rec.points);
+        assertTrue(rec.teleports.isEmpty());
         rec.paused = false;
         assertEquals(WORLD_CHANGED, rec.teleport("nether", p(0), p(100), 5000));
         assertTrue(rec.paused);

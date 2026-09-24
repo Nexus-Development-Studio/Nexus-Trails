@@ -26,7 +26,13 @@ public final class RouteStore {
             for (Map<?, ?> row : root.getMapList(id + ".points")) {
                 points.add(new Route.Point(number(row.get("x")), number(row.get("y")), number(row.get("z"))));
             }
-            loaded.put(id, new Route(id, root.getString(id + ".world"), points));
+            List<Integer> teleports = new ArrayList<>();
+            for (Object value : root.getList(id + ".teleports", List.of())) {
+                double index = number(value);
+                if (index != (int) index) throw new IllegalArgumentException("Teleport indices must be integers");
+                teleports.add((int) index);
+            }
+            loaded.put(id, new Route(id, root.getString(id + ".world"), points, teleports));
         }
         routes = Map.copyOf(loaded);
     }
@@ -54,6 +60,7 @@ public final class RouteStore {
             String base = "destinations." + route.id();
             yaml.set(base + ".world", route.world());
             yaml.set(base + ".points", route.points().stream().map(p -> Map.of("x", p.x(), "y", p.y(), "z", p.z())).toList());
+            if (!route.teleports().isEmpty()) yaml.set(base + ".teleports", route.teleports());
         }
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");

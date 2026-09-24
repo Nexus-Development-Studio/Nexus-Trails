@@ -129,7 +129,7 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
                     if (points.getLast().distanceSquared(end) > .01) points.add(end);
                     if (points.size() < 2) { player.sendMessage("§cWalk farther before saving, or use /trail set for a simple waypoint."); break; }
                     if (points.size() > settings.maxPoints()) { player.sendMessage("§cPoint limit reached. Return to the last recorded point to save."); break; }
-                    saveNew(new Route(rec.id, rec.world, points));
+                    saveNew(new Route(rec.id, rec.world, points, rec.teleports));
                     recordings.remove(player.getUniqueId());
                     player.sendMessage("§aRoute saved: §f" + rec.id + " §7(" + points.size() + " points)");
                 }
@@ -226,6 +226,7 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
     static final class Recording {
         final String id, world;
         final List<Route.Point> points = new ArrayList<>();
+        final List<Integer> teleports = new ArrayList<>();
         boolean paused;
         Recording(String id, String world, Route.Point start) { this.id = id; this.world = world; points.add(start); }
 
@@ -237,9 +238,11 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
             List<Route.Point> additions = new ArrayList<>(2);
             Route.Point last = points.getLast();
             if (last.distanceSquared(from) > .01) { additions.add(from); last = from; }
-            if (last.distanceSquared(to) > .01) additions.add(to);
+            boolean moved = last.distanceSquared(to) > .01;
+            if (moved) additions.add(to);
             if (points.size() + additions.size() > maxPoints) { paused = true; return TeleportResult.POINT_LIMIT; }
             points.addAll(additions);
+            if (moved) teleports.add(points.size() - 1);
             return TeleportResult.CONTINUED;
         }
     }

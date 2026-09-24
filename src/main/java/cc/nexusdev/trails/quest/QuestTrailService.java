@@ -13,6 +13,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -57,7 +58,10 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
     private void assign(UUID id, Session session) {
         restores.remove(id); // a new command/API decision always wins over delayed login restoration
         Player player = Bukkit.getPlayer(id);
-        if (player != null && player.isOnline()) sessions.put(id, session);
+        if (player != null && player.isOnline()) {
+            session.ticks = settings.get().interval() - 1; // first render on the next server tick
+            sessions.put(id, session);
+        }
         else sessions.remove(id);
     }
 
@@ -94,6 +98,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         Location target = session.npcId == null ? session.destination : CitizensTarget.location(session.npcId);
         if (target == null) { notice(player, session, "The quest NPC is not spawned. Guidance is paused."); return; }
         if (!player.getWorld().equals(target.getWorld())) {
+            session.planTarget = null;
             notice(player, session, "Your quest destination is in " + target.getWorld().getName() + ". Travel there to resume guidance.");
             return;
         }
@@ -101,36 +106,69 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         if (position.distanceSquared(endpoint) <= render.arrivalRadius() * render.arrivalRadius()) {
             notice(player, session, "Quest destination reached."); return;
         }
-        List<String> ids = session.npcId == null ? config.locationRoutes : config.npcRoutes.getOrDefault(session.npcId, List.of());
-        RouteGeometry.Path path = null;
-        for (String id : ids) {
-            Route route = store.get(id);
-            if (route == null || !route.world().equals(target.getWorld().getName())) continue;
-            var candidate = QuestPath.build(route, position, endpoint, config.joinRadius, config.targetRadius);
-            if (candidate.isPresent() && (path == null || candidate.get().length() < path.length())) path = candidate.get();
+        boolean offPath = session.plan != null && session.plan.path.at(session.plan.path.progress(position)).distanceSquared(position) > 9;
+        if (session.planTarget == null || endpoint.distanceSquared(session.planTarget) > .25
+                || session.ticks - session.planAt >= 40 || offPath || session.routeSnapshot != store.all() || session.config != config) {
+            session.plan = plan(player.getWorld(), session, position, endpoint);
+            session.planTarget = endpoint;
+            session.planAt = session.ticks;
+            session.routeSnapshot = store.all();
+            session.config = config;
         }
-        if (path == null) {
-            notice(player, session, "No nearby configured quest route. Move closer to the marked road, or ask an administrator to configure it.");
+        if (session.plan == null) {
+            notice(player, session, "No walkable connection to a configured quest route is currently available.");
             return;
         }
-        double end = Math.min(path.length(), render.maxAhead());
-        // Check the entire visible corridor, including the player-to-route connector and every corner.
-        for (double d = 0; d < end; d += .2) {
-            if (!SafeCorridor.clear(player.getWorld(), path.at(d))) {
-                notice(player, session, "Quest route blocked or not loaded. Guidance is paused."); return;
-            }
+        RouteGeometry.Path path = session.plan.path;
+        double progress = path.progress(position);
+        double end = Math.min(path.length(), progress + render.maxAhead());
+        // Render the usable prefix. A later obstruction must not hide the road leading up to it.
+        List<Route.Point> visible = new ArrayList<>();
+        for (double d = progress; ; d = Math.min(end, d + .2)) {
+            Route.Point adjusted = SafeCorridor.adjust(player.getWorld(), path.at(d));
+            if (adjusted == null) break;
+            QuestPath.append(visible, adjusted);
+            if (d >= end) break;
         }
-        if (!SafeCorridor.clear(player.getWorld(), path.at(end))) {
-            notice(player, session, "Quest route blocked or not loaded. Guidance is paused."); return;
+        if (visible.isEmpty()) {
+            notice(player, session, "The next part of the quest route is obstructed or not loaded."); return;
         }
-        session.notice = null;
         session.warned = false;
+        if (session.plan.teleport && position.distanceSquared(path.end()) <= 2.25)
+            notice(player, session, "Use the elevator or teleport here; your trail continues on the other side.");
+        else session.notice = null;
+        RouteGeometry.Path display = new RouteGeometry.Path(visible);
         int spawned = 0;
-        for (double d = Math.min(end, render.minAhead()); d <= end && spawned + 6 <= render.budget(); d += render.spacing()) {
-            TrailParticles.spawn(player, render, path.at(d), path.at(Math.min(path.length(), d + .8)),
-                    path.length() <= .001 ? 1 : d / path.length());
+        for (double d = Math.min(display.length(), render.minAhead()); d <= display.length() && spawned + 6 <= render.budget(); d += render.spacing()) {
+            TrailParticles.spawn(player, render, display.at(d), display.at(Math.min(display.length(), d + .8)),
+                    display.length() <= .001 ? 1 : d / display.length());
             spawned += 6;
         }
+    }
+
+    private record Plan(RouteGeometry.Path path, boolean teleport) {}
+
+    private Plan plan(World world, Session session, Route.Point position, Route.Point endpoint) {
+        List<String> ids = session.npcId == null ? config.locationRoutes : config.npcRoutes.getOrDefault(session.npcId, List.of());
+        List<QuestPath.Entrance> entrances = new ArrayList<>();
+        for (String id : ids) {
+            Route route = store.get(id);
+            if (route != null && route.world().equals(world.getName()))
+                entrances.addAll(QuestPath.entrances(route, position, endpoint, config.targetRadius));
+        }
+        entrances.sort(Comparator.comparingDouble(QuestPath.Entrance::distanceSquared));
+        Plan partial = null;
+        for (QuestPath.Entrance entrance : entrances.stream().limit(3).toList()) {
+            WalkingConnector.Result connection = WalkingConnector.find(world, position, entrance.tail().getFirst(), config.connectorNodes / 3);
+            if (connection == null) continue;
+            List<Route.Point> points = new ArrayList<>(connection.points());
+            if (connection.complete()) {
+                entrance.tail().forEach(point -> QuestPath.append(points, point));
+                return new Plan(new RouteGeometry.Path(points), entrance.teleport());
+            }
+            if (partial == null) partial = new Plan(new RouteGeometry.Path(points), false);
+        }
+        return partial;
     }
 
     private static void notice(Player player, Session session, String message) {
@@ -139,6 +177,15 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) { restore(event.getPlayer()); }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onTeleport(PlayerTeleportEvent event) {
+        Session session = sessions.get(event.getPlayer().getUniqueId());
+        if (session != null) {
+            session.planTarget = null;
+            session.ticks = settings.get().interval() - 1;
+        }
+    }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
@@ -191,11 +238,16 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         int ticks;
         String notice;
         boolean warned;
+        Plan plan;
+        Route.Point planTarget;
+        int planAt;
+        Map<String, Route> routeSnapshot;
+        Config config;
         Session(Integer npcId, Location destination) { this.npcId = npcId; this.destination = destination; }
     }
 
     private record Config(Map<Integer, List<String>> npcRoutes, List<String> locationRoutes,
-                          List<Map<?, ?>> restoreRules, double joinRadius, double targetRadius) {
+                          List<Map<?, ?>> restoreRules, int connectorNodes, double targetRadius) {
         static Config read(ConfigurationSection root) {
             Map<Integer, List<String>> mappings = new HashMap<>();
             ConfigurationSection section = root.getConfigurationSection("quest-trails.npc-routes");
@@ -208,7 +260,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
             for (Map<?, ?> rule : rules) for (String key : List.of("after-quest", "until-quest", "npc"))
                 BeautyQuestsProgress.integer(rule, key);
             return new Config(Map.copyOf(mappings), List.copyOf(root.getStringList("quest-trails.location-routes")),
-                    List.copyOf(rules), radius(root, "join-radius", 2), radius(root, "target-radius", 3));
+                    List.copyOf(rules), Math.clamp(root.getInt("quest-trails.connector-max-nodes", 768), 96, 3072), radius(root, "target-radius", 3));
         }
         private static double radius(ConfigurationSection root, String key, double fallback) {
             double value = root.getDouble("quest-trails." + key, fallback);

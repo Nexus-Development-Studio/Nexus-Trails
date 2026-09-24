@@ -28,7 +28,7 @@ public final class TrailService {
         }
         stop(player.getUniqueId());
         Session session = new Session(player, destination, settings,
-                new RouteGeometry.Path(RouteGeometry.join(from, destination.points())));
+                new RouteGeometry.Path(RouteGeometry.join(from, destination)));
         sessions.put(player.getUniqueId(), session);
         session.task = player.getScheduler().runAtFixedRate(plugin, task -> session.tick(), session::retired, 1L, settings.interval());
         if (session.task == null) { session.retired(); return; }
@@ -85,8 +85,8 @@ public final class TrailService {
             }
             Route.Point position = point(player.getLocation());
             if (needsRejoin.getAndSet(false))
-                path = new RouteGeometry.Path(RouteGeometry.join(position, destination.points()));
-            if (position.distanceSquared(path.end()) <= settings.arrivalRadius() * settings.arrivalRadius()) {
+                path = new RouteGeometry.Path(RouteGeometry.join(position, destination));
+            if (position.distanceSquared(destination.points().getLast()) <= settings.arrivalRadius() * settings.arrivalRadius()) {
                 finish("§aDestination reached: §f" + destination.id()); return;
             }
             double progress = path.progress(position);

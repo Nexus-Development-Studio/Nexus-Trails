@@ -16,6 +16,21 @@ public final class RouteGeometry {
     }
 
     /** Join the closest segment and follow the recorded direction to its destination. */
+    public static List<Point> join(Point from, Route route) {
+        List<Point> best = null;
+        double distance = Double.POSITIVE_INFINITY;
+        for (List<Point> section : route.sections()) {
+            double nearest = from.distanceSquared(section.getFirst());
+            for (int i = 1; i < section.size(); i++) {
+                Point a = section.get(i - 1), b = section.get(i);
+                nearest = Math.min(nearest, from.distanceSquared(a.interpolate(b, projection(from, a, b))));
+            }
+            if (nearest < distance) { distance = nearest; best = section; }
+        }
+        return join(from, best);
+    }
+
+    /** Join a continuous walking section. */
     public static List<Point> join(Point from, List<Point> points) {
         if (points.isEmpty()) throw new IllegalArgumentException("Empty route");
         List<Point> result = new ArrayList<>();

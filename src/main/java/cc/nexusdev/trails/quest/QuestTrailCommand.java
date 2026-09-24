@@ -40,7 +40,7 @@ public final class QuestTrailCommand implements TabExecutor {
                 api.showToLocation(player.getUniqueId(), new Location(world,
                         Double.parseDouble(args[4]), Double.parseDouble(args[5]), Double.parseDouble(args[6])));
             } else return usage(sender);
-            sender.sendMessage("§aQuest guidance assigned for " + player.getName() + ". Rendering requires a nearby configured route and available destination.");
+            sender.sendMessage("§aQuest guidance assigned for " + player.getName() + ". Connecting to a configured route toward the destination.");
         } catch (IllegalArgumentException | IllegalStateException ex) { sender.sendMessage("§c" + ex.getMessage()); }
         return true;
     }

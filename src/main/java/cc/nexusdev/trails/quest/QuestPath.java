@@ -2,27 +2,41 @@ package cc.nexusdev.trails.quest;
 
 import cc.nexusdev.trails.Route;
 import cc.nexusdev.trails.RouteGeometry;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
-/** Only joins recorded paths nearby, and only connects endpoints to nearby targets. */
+/** Finds route entrances without interpolating through a recorded teleport. */
 public final class QuestPath {
     private QuestPath() {}
 
-    public static Optional<RouteGeometry.Path> build(Route route, Route.Point player, Route.Point target,
-                                                    double joinRadius, double targetRadius) {
-        if (route.points().size() < 2 || route.points().getLast().distanceSquared(target) > targetRadius * targetRadius)
-            return Optional.empty();
-        double nearest = Double.POSITIVE_INFINITY;
-        for (int i = 1; i < route.points().size(); i++) {
-            Route.Point a = route.points().get(i - 1), b = route.points().get(i);
-            nearest = Math.min(nearest, player.distanceSquared(a.interpolate(b, RouteGeometry.projection(player, a, b))));
+    public record Entrance(List<Route.Point> tail, boolean teleport, double distanceSquared) {}
+
+    public static List<Entrance> entrances(Route route, Route.Point player, Route.Point target, double targetRadius) {
+        if (route.points().getLast().distanceSquared(target) > targetRadius * targetRadius) return List.of();
+        List<List<Route.Point>> sections = route.sections();
+        List<Entrance> entrances = new ArrayList<>();
+        for (int s = 0; s < sections.size(); s++) {
+            List<Route.Point> section = sections.get(s);
+            Route.Point closest = section.getFirst();
+            double best = closest.distanceSquared(player);
+            int segment = 0;
+            for (int i = 0; i < section.size() - 1; i++) {
+                Route.Point a = section.get(i), b = section.get(i + 1);
+                Route.Point projection = a.interpolate(b, RouteGeometry.projection(player, a, b));
+                double distance = projection.distanceSquared(player);
+                if (distance < best) { best = distance; closest = projection; segment = i; }
+            }
+            List<Route.Point> tail = new ArrayList<>();
+            tail.add(closest);
+            for (int i = segment + 1; i < section.size(); i++) append(tail, section.get(i));
+            boolean teleport = s < sections.size() - 1;
+            if (!teleport) append(tail, target);
+            entrances.add(new Entrance(List.copyOf(tail), teleport, best));
         }
-        if (nearest > joinRadius * joinRadius) return Optional.empty();
-        List<Route.Point> joined = RouteGeometry.join(player, route.points());
-        List<Route.Point> points = new ArrayList<>(joined);
-        if (points.getLast().distanceSquared(target) > 1e-8) points.add(target);
-        return Optional.of(new RouteGeometry.Path(points));
+        entrances.sort(Comparator.comparingDouble(Entrance::distanceSquared));
+        return List.copyOf(entrances);
+    }
+
+    static void append(List<Route.Point> points, Route.Point point) {
+        if (points.isEmpty() || points.getLast().distanceSquared(point) > 1e-8) points.add(point);
     }
 }

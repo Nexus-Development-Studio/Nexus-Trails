@@ -34,6 +34,16 @@ class RouteStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> store.all().clear());
         assertThrows(UnsupportedOperationException.class, () -> store.get("spawn").points().clear());
     }
+    @Test void teleportTransitionsSurviveRestartWithoutBecomingWalkableSegments() throws Exception {
+        Path file = directory.resolve("elevators.yml");
+        var route = new Route("lift", "world", List.of(new Route.Point(0, 64, 0),
+                new Route.Point(8, 64, 0), new Route.Point(8, 84, 0), new Route.Point(20, 84, 0)), List.of(2));
+        new RouteStore(file).save(route);
+        var loaded = new RouteStore(file); loaded.load();
+        assertEquals(route, loaded.get("lift"));
+        assertEquals(2, loaded.get("lift").sections().size());
+        assertThrows(IllegalArgumentException.class, () -> new Route("bad", "world", route.points(), List.of(99)));
+    }
     @Test void unsafeConfigValuesAreBounded() {
         var config = new YamlConfiguration();
         config.set("render.particle-spacing", Double.NaN);
