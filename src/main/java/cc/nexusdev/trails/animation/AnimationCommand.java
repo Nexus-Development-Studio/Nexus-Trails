@@ -21,7 +21,7 @@ public final class AnimationCommand implements TabExecutor {
             else if(args.length==2&&args[0].equalsIgnoreCase("reset")) api.reset(target.getUniqueId());
             else return usage(sender);
             sender.sendMessage("§aAnimation for "+target.getName()+": "+api.selected(target.getUniqueId()));
-        } catch(IllegalArgumentException ex) {sender.sendMessage("§c"+ex.getMessage());}
+        } catch(IllegalArgumentException|IllegalStateException ex) {sender.sendMessage("§c"+ex.getMessage());}
         return true;
     }
     private boolean usage(CommandSender sender) {sender.sendMessage("§e/trailanimation list | set <player> <id> | reset <player>");return true;}

@@ -31,14 +31,14 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
     }
     private final JavaPlugin plugin;
     private final Map<String,Registration> registry=new ConcurrentHashMap<>();
-    private final Map<UUID,String> selections=new ConcurrentHashMap<>();
-    private final Map<UUID,AnimationStyle> styles=new ConcurrentHashMap<>();
+    private final AnimationPreferences preferences;
     private final Map<Key,FrameState> states=new ConcurrentHashMap<>();
     private volatile AnimationConfig config;
     private volatile boolean closed;
 
     public AnimationEngine(JavaPlugin plugin) {
         this.plugin=plugin;
+        preferences=new AnimationPreferences(plugin.getDataFolder().toPath().resolve("animation-preferences.yml"));
         BuiltInAnimations.all().forEach((id,animation)->registry.put(id,new Registration(plugin,animation)));
         reload();
     }
@@ -85,16 +85,16 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
     @Override public void select(UUID playerId,String name) {
         open();String id=id(name);
         if(!registry.containsKey(id)) throw new IllegalArgumentException("Unknown animation: "+id);
-        selections.put(Objects.requireNonNull(playerId),id); clearStates(playerId);
+        preferences.select(playerId,id); clearStates(playerId);
     }
-    @Override public void reset(UUID playerId) { open();selections.remove(Objects.requireNonNull(playerId));clearStates(playerId); }
+    @Override public void reset(UUID playerId) { open();preferences.select(playerId,null);clearStates(playerId); }
     @Override public String selected(UUID playerId) {
-        String requested=selections.getOrDefault(Objects.requireNonNull(playerId),config.selected());
+        String requested=preferences.selection(playerId,config.selected());
         return registry.containsKey(requested)?requested:config.fallback();
     }
-    @Override public void setStyle(UUID playerId,AnimationStyle style) { open();styles.put(Objects.requireNonNull(playerId),Objects.requireNonNull(style)); }
+    @Override public void setStyle(UUID playerId,AnimationStyle style) { open();preferences.setStyle(playerId,Objects.requireNonNull(style)); }
     @Override public AnimationStyle style(String animationId) { return config.style(id(animationId)); }
-    @Override public void resetStyle(UUID playerId) { open();styles.remove(Objects.requireNonNull(playerId)); }
+    @Override public void resetStyle(UUID playerId) { open();preferences.setStyle(playerId,null); }
     private void clearStates(UUID id) { states.keySet().removeIf(key->key.player.equals(id)); }
     public void forget(UUID player,TrailKind kind) { states.remove(new Key(player,kind)); }
 
@@ -102,7 +102,7 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         if(closed) return;
         UUID uuid=player.getUniqueId();AnimationConfig snapshot=config;
         String requested=selected(uuid);
-        AnimationStyle style=styles.getOrDefault(uuid,snapshot.style(requested));
+        AnimationStyle style=preferences.style(uuid,snapshot.style(requested));
         TrailAnimationSelectEvent event=new TrailAnimationSelectEvent(player,kind,source,requested,style);
         Bukkit.getPluginManager().callEvent(event);
         if(event.isCancelled()) return;
@@ -110,7 +110,7 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         try { selected=id(event.getAnimationId()); } catch(IllegalArgumentException invalid) { selected=snapshot.fallback(); }
         if(!registry.containsKey(selected)) selected=snapshot.fallback();
         if(event.isStyleChanged()) style=event.getStyle();
-        else if(!selected.equals(requested)) style=styles.getOrDefault(uuid,snapshot.style(selected));
+        else if(!selected.equals(requested)) style=preferences.style(uuid,snapshot.style(selected));
         Registration registration=registry.get(selected);
         if(registration==null) return;
         Key key=new Key(uuid,kind);
@@ -133,7 +133,7 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         }
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
-        UUID id=event.getPlayer().getUniqueId();selections.remove(id);styles.remove(id);clearStates(id);
+        clearStates(event.getPlayer().getUniqueId());
     }
     @EventHandler(ignoreCancelled=true,priority=EventPriority.MONITOR)
     public void teleported(PlayerTeleportEvent event) { clearStates(event.getPlayer().getUniqueId()); }
@@ -142,5 +142,5 @@ public final class AnimationEngine implements TrailAnimationAPI, Listener {
         registry.entrySet().removeIf(e->e.getValue().owner==event.getPlugin());
         states.entrySet().removeIf(e->e.getValue().registration.owner==event.getPlugin());
     }
-    public void shutdown() { closed=true;states.clear();selections.clear();styles.clear();registry.clear(); }
+    public void shutdown() { closed=true;states.clear();registry.clear(); }
 }

@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.3.0</version>
+  <version>1.3.1</version>
   <name>Nexus Trails</name>
   <properties>
     <maven.compiler.release>21</maven.compiler.release>

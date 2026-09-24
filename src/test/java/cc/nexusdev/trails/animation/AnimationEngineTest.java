@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.plugin.*;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -34,6 +35,83 @@ class AnimationEngineTest {
     }
     @AfterEach void close() {engine.shutdown();bukkit.close();}
     void render(double seconds) {engine.render(viewer,TrailKind.QUEST,"npc:11",BuiltInAnimationsTest.path(),seconds,.8,12);}
+
+    @Test void logoutKeepsPreferencesButClearsRenderState() {
+        List<AnimationFrame> frames=new ArrayList<>();
+        engine.register(extension,"example:state",(frame,sink)->frames.add(frame));
+        var style=engine.style("comet").withPalette(List.of(Color.BLUE));
+        engine.select(uuid,"example:state");engine.setStyle(uuid,style);render(0);
+        PlayerQuitEvent quit=mock(PlayerQuitEvent.class);when(quit.getPlayer()).thenReturn(viewer);
+        engine.quit(quit);render(1);
+        assertEquals("example:state",engine.selected(uuid));
+        assertEquals(style,frames.get(1).style());
+        assertNotSame(frames.get(0).state(),frames.get(1).state());
+    }
+
+    @Test void selectionSurvivesReloadAndRestartIndependentlyForEachPlayer() {
+        UUID other=UUID.randomUUID();
+        String defaultAnimation=engine.selected(uuid);
+        engine.select(uuid,"wave");engine.select(other,"clockwork-moth");
+        engine.reload();assertEquals("nexustrails:wave",engine.selected(uuid));
+        engine.shutdown();engine=new AnimationEngine(plugin);
+        assertEquals("nexustrails:wave",engine.selected(uuid));
+        assertEquals("nexustrails:clockwork-moth",engine.selected(other));
+        engine.reset(uuid);engine.shutdown();engine=new AnimationEngine(plugin);
+        assertEquals(defaultAnimation,engine.selected(uuid));
+        assertEquals("nexustrails:clockwork-moth",engine.selected(other));
+    }
+
+    @Test void customSelectionAndCompleteStyleReturnAfterProviderRegistersOnRestart() {
+        engine.register(extension,"example:custom",(frame,sink)->{});
+        var style=new AnimationStyle(Particle.DUST_COLOR_TRANSITION,List.of(Color.BLUE,Color.RED),
+                3.5,1.2,.6,.7,.8,.2,1.4f,35,Map.of("custom-speed",2.3));
+        engine.select(uuid,"example:custom");engine.setStyle(uuid,style);
+        engine.shutdown();engine=new AnimationEngine(plugin);
+        assertEquals("nexustrails:breathing",engine.selected(uuid)); // Provider has not enabled yet.
+        List<AnimationFrame> frames=new ArrayList<>();
+        engine.register(extension,"example:custom",(frame,sink)->frames.add(frame));render(0);
+        assertEquals("example:custom",engine.selected(uuid));
+        assertEquals(style,frames.getFirst().style());
+        engine.resetStyle(uuid);engine.shutdown();engine=new AnimationEngine(plugin);
+        engine.register(extension,"example:custom",(frame,sink)->frames.add(frame));render(0);
+        assertEquals("example:custom",engine.selected(uuid));
+        assertNotEquals(style,frames.getLast().style());
+    }
+
+    @Test void resettingSelectionKeepsStyleAndResettingBothStaysResetAfterRestart() {
+        String defaultAnimation=engine.selected(uuid);
+        var style=engine.style("comet").withPalette(List.of(Color.BLUE));
+        engine.select(uuid,"comet");engine.setStyle(uuid,style);engine.reset(uuid);
+        engine.shutdown();engine=new AnimationEngine(plugin);
+        assertEquals(defaultAnimation,engine.selected(uuid));
+        List<AnimationFrame> frames=new ArrayList<>();
+        engine.register(extension,"example:style",(frame,sink)->frames.add(frame));
+        engine.select(uuid,"example:style");render(0);assertEquals(style,frames.getFirst().style());
+        engine.reset(uuid);engine.resetStyle(uuid);
+        engine.shutdown();engine=new AnimationEngine(plugin);
+        assertEquals(defaultAnimation,engine.selected(uuid));
+        engine.register(extension,"example:style",(frame,sink)->frames.add(frame));
+        engine.select(uuid,"example:style");render(0);assertNotEquals(style,frames.getLast().style());
+    }
+
+    @Test void selectionsAreSavedImmediatelyAndFailedWriteKeepsPreviousChoice() throws Exception {
+        engine.select(uuid,"comet");
+        Path file=directory.resolve("animation-preferences.yml");
+        assertEquals("nexustrails:comet",new AnimationPreferences(file).selection(uuid,"fallback"));
+        // A nonempty directory at the file path makes replacement fail on every platform.
+        Files.delete(file);Files.createDirectory(file);Files.writeString(file.resolve("blocker"),"keep");
+        assertThrows(IllegalStateException.class,()->engine.select(uuid,"wave"));
+        assertEquals("nexustrails:comet",engine.selected(uuid));
+        assertEquals("keep",Files.readString(file.resolve("blocker")));
+    }
+
+    @Test void invalidPreferenceFileIsNotSilentlyReplaced() throws Exception {
+        Path file=directory.resolve("animation-preferences.yml");
+        String corrupt="version: 1\nplayers:\n  invalid-uuid:\n    animation: comet\n";
+        Files.writeString(file,corrupt);
+        assertThrows(IllegalStateException.class,()->new AnimationEngine(plugin));
+        assertEquals(corrupt,Files.readString(file));
+    }
 
     @Test void customCallbacksAreSelectableAndListenerCanOverrideSelection() {
         AtomicInteger a=new AtomicInteger(),b=new AtomicInteger();

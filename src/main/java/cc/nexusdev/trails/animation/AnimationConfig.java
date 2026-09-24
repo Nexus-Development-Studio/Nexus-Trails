@@ -20,7 +20,7 @@ record AnimationConfig(String selected, String fallback, AnimationStyle common, 
         return new AnimationConfig(selected,fallback,common,Map.copyOf(profiles));
     }
     AnimationStyle style(String id) { return profiles.getOrDefault(id,common); }
-    private static AnimationStyle parse(ConfigurationSection section,ConfigurationSection defaults) {
+    static AnimationStyle parse(ConfigurationSection section,ConfigurationSection defaults) {
         java.util.function.Function<String,Object> get=key->section.contains(key)?section.get(key):defaults==null?null:defaults.get(key);
         Object rawPalette=get.apply("palette");
         if(!(rawPalette instanceof List<?> list)) throw new IllegalArgumentException("An animation palette is required");

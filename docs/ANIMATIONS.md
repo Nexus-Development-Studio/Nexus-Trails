@@ -1,6 +1,6 @@
 # Trail animations
 
-Nexus Trails 1.3.0 includes all 46 built-in effects below. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
+Nexus Trails 1.3.1 includes all 46 built-in effects below. Colors, particle type, period, size, geometry scale and effect parameters come from `plugins/NexusTrails/animations.yml`. The built-ins are registered through the same registry used by extensions; custom plugins are not limited to the built-in names or geometries.
 
 ## Server configuration and commands
 
@@ -49,7 +49,9 @@ trailanimation set <player> myplugin:aurora
 trailanimation reset <player>
 ```
 
-Commands require `nexustrails.animation.admin` (console/operators by default). Use the online player's exact name or UUID. Selection takes effect on the next render update and applies to that player's ordinary and quest trails. Selection does not start a destination by itself. Selections and programmatic style overrides last until reset, disconnect or server restart. Resetting selection does not reset a programmatic style override.
+Commands require `nexustrails.animation.admin` (console/operators by default). Use the online player's exact name or UUID. Selection takes effect on the next render update and applies to that player's ordinary and quest trails. Selection does not start a destination by itself. Selections and programmatic style overrides are saved by player UUID in `plugins/NexusTrails/animation-preferences.yml` and survive logout, configuration reload and server restart. Restored quest trails use the saved choice. Only an explicit reset removes a preference; resetting selection does not reset a programmatic style override.
+
+Changes are saved immediately. A failed save reports an error and keeps the previous preference. Back up `animation-preferences.yml` with your other plugin data; it is managed by the plugin, while `animations.yml` defines effects and defaults. A custom animation whose provider is unavailable temporarily uses the fallback without replacing the saved choice, and resumes when its provider registers again. Frame-local listener overrides are not saved. Choices already discarded by version 1.3.0 must be selected once after upgrading.
 
 BeautyQuests can run these console actions consecutively:
 
@@ -119,7 +121,7 @@ The end of the currently visible walking section is the animation's forward dire
 
 ## API selection
 
-Use the `nexustrails` **1.3.0** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
+Use the `nexustrails` **1.3.1** `api` classifier with Maven `provided` scope, and `depend: [NexusTrails]` (or `softdepend` plus a missing-service check). Do not shade the API or install the API-only JAR as a server plugin. The API includes all animation interfaces and event classes without implementation classes.
 
 ```java
 import cc.nexusdev.trails.api.animation.TrailAnimationAPI;
@@ -137,7 +139,7 @@ animations.select(player.getUniqueId(), "nexustrails:comet");
 animations.reset(player.getUniqueId());
 ```
 
-`animations.animations()` returns registered IDs, including third-party IDs. Registration, selection and style storage use thread-safe collections. Rendering itself always stays on the ordinary trail's owning entity scheduler, or the quest service's Paper server thread. The animation service is available for ordinary trails on Folia; the Citizens/BeautyQuests quest service still requires Paper.
+`animations.animations()` returns registered IDs, including third-party IDs. Registration and preference access are thread-safe. Preference mutations serialize disk writes before publishing an immutable snapshot and throw `IllegalStateException` if saving fails. Set persistent preferences when they change, rather than on every animation frame; use the selection event for frame-local changes. Rendering itself always stays on the ordinary trail's owning entity scheduler, or the quest service's Paper server thread. The animation service is available for ordinary trails on Folia; the Citizens/BeautyQuests quest service still requires Paper.
 
 For programmatic appearance, pass an immutable `AnimationStyle` to `setStyle(UUID, style)`. Read a configured profile with `animations.style("comet")`, then use helpers `withPalette`, `withParticle` and `withPeriod` to derive a style (or use the full constructor). For example: `animations.setStyle(playerId, animations.style("comet").withPeriod(5.0))`. `resetStyle(UUID)` returns to configuration. Per-player styles override profile configuration; listener styles override both for that frame.
 
