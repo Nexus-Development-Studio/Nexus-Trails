@@ -72,7 +72,7 @@ Edit the file while the server is stopped, or run `/trail reload` after edits. K
 
 The config controls particle spacing, look-ahead distance, height above recorded feet positions, update rate, particle budget, trail timeout, arrival radius, and recording limits. Defaults render up to 120 particles per update every 6 ticks, with a 20-block look-ahead and 180-second timeout. Values are bounded to prevent zero-spacing loops and excessive configured budgets.
 
-Trails stop on arrival, timeout, teleport, world change, death, disconnect, plugin disable or explicit cancellation. Reloading also stops active trails. Tracing never loads chunks or changes blocks. The plugin does not create destinations automatically from NRM plots; it runs independently and does not alter NRM's existing trail feature.
+Trails continue after teleporting and rejoin the original route from the player's new position. Moving to another world pauses particles until the player returns to the destination's world; the existing timeout still applies and is not reset by teleporting. Route recording still pauses on teleport to avoid recording jumps. Trails stop on arrival, timeout, death, disconnect, plugin disable or explicit cancellation. Reloading stops ordinary trails. Tracing never loads chunks or changes blocks. The plugin does not create destinations automatically from NRM plots; it runs independently and does not alter NRM's existing trail feature.
 
 ## Build and verification
 

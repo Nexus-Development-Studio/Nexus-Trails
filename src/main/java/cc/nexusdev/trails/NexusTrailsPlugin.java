@@ -187,12 +187,13 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
         Route.Point point = TrailService.point(event.getTo());
         if (rec.points.getLast().distanceSquared(point) >= settings.recordSpacing() * settings.recordSpacing()) rec.points.add(point);
     }
-    @EventHandler(ignoreCancelled = true) public void onTeleport(PlayerTeleportEvent event) {
-        trails.stop(event.getPlayer().getUniqueId());
+    @EventHandler(ignoreCancelled = true, priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onTeleport(PlayerTeleportEvent event) {
+        trails.rejoin(event.getPlayer().getUniqueId());
         Recording rec = recordings.get(event.getPlayer().getUniqueId());
         if (rec != null) { rec.paused = true; event.getPlayer().sendMessage("§eRecording paused after teleporting. Return to the route before /trail resume."); }
     }
-    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) { trails.stop(event.getPlayer().getUniqueId()); }
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) { trails.rejoin(event.getPlayer().getUniqueId()); }
     @EventHandler public void onQuit(PlayerQuitEvent event) { trails.stop(event.getPlayer().getUniqueId()); recordings.remove(event.getPlayer().getUniqueId()); }
 
     private void help(CommandSender sender) {

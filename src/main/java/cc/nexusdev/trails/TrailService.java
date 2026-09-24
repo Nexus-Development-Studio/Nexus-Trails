@@ -7,6 +7,7 @@ import org.bukkit.plugin.Plugin;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Personal forward-moving TRAIL particles, color-transition accents, and dust glow extracted from NRM. */
 public final class TrailService {
@@ -40,6 +41,11 @@ public final class TrailService {
         session.cancel();
         return true;
     }
+    /** Rejoin the original route from the player's actual position on the next entity tick. */
+    public void rejoin(UUID id) {
+        Session session = sessions.get(id);
+        if (session != null) session.needsRejoin.set(true);
+    }
     public void stopDestination(String id) {
         sessions.values().stream().filter(s -> s.destination.id().equals(id)).forEach(s -> stop(s.player.getUniqueId()));
     }
@@ -50,7 +56,8 @@ public final class TrailService {
         final Player player;
         final Route destination;
         final TrailSettings settings;
-        final RouteGeometry.Path path;
+        RouteGeometry.Path path;
+        final AtomicBoolean needsRejoin = new AtomicBoolean();
         final long started = System.nanoTime();
         volatile ScheduledTask task;
         Session(Player player, Route destination, TrailSettings settings, RouteGeometry.Path path) {
@@ -66,13 +73,19 @@ public final class TrailService {
         }
         void tick() {
             if (sessions.get(player.getUniqueId()) != this) { cancel(); return; }
-            if (!player.isOnline() || !player.getWorld().getName().equals(destination.world()) || player.isDead()) {
+            if (!player.isOnline() || player.isDead()) {
                 finish(null); return;
             }
             if ((System.nanoTime() - started) / 1_000_000_000L >= settings.timeoutSeconds()) {
                 finish("§eTrail timed out. Use /trail " + destination.id() + " to restart."); return;
             }
+            if (!player.getWorld().getName().equals(destination.world())) {
+                needsRejoin.set(true);
+                return;
+            }
             Route.Point position = point(player.getLocation());
+            if (needsRejoin.getAndSet(false))
+                path = new RouteGeometry.Path(RouteGeometry.join(position, destination.points()));
             if (position.distanceSquared(path.end()) <= settings.arrivalRadius() * settings.arrivalRadius()) {
                 finish("§aDestination reached: §f" + destination.id()); return;
             }
