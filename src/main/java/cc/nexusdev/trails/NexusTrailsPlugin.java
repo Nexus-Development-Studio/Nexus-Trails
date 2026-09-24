@@ -191,7 +191,13 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
     public void onTeleport(PlayerTeleportEvent event) {
         trails.rejoin(event.getPlayer().getUniqueId());
         Recording rec = recordings.get(event.getPlayer().getUniqueId());
-        if (rec != null) { rec.paused = true; event.getPlayer().sendMessage("§eRecording paused after teleporting. Return to the route before /trail resume."); }
+        if (rec == null || event.getTo() == null) return;
+        switch (rec.teleport(event.getTo().getWorld().getName(), TrailService.point(event.getFrom()),
+                TrailService.point(event.getTo()), settings.maxPoints())) {
+            case WORLD_CHANGED -> event.getPlayer().sendMessage("§eRecording paused: routes cannot span worlds. Return to " + rec.world + " before /trail resume.");
+            case POINT_LIMIT -> event.getPlayer().sendMessage("§eRecording point limit reached. Return to the last recorded point to save, or /trail cancel.");
+            default -> { }
+        }
     }
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) { trails.rejoin(event.getPlayer().getUniqueId()); }
     @EventHandler public void onQuit(PlayerQuitEvent event) { trails.stop(event.getPlayer().getUniqueId()); recordings.remove(event.getPlayer().getUniqueId()); }
@@ -217,10 +223,24 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
         String prefix = args.length == 0 ? "" : args[args.length - 1].toLowerCase(Locale.ROOT);
         return candidates.stream().filter(s -> s.startsWith(prefix)).toList();
     }
-    private static final class Recording {
+    static final class Recording {
         final String id, world;
         final List<Route.Point> points = new ArrayList<>();
         boolean paused;
         Recording(String id, String world, Route.Point start) { this.id = id; this.world = world; points.add(start); }
+
+        enum TeleportResult { CONTINUED, ALREADY_PAUSED, WORLD_CHANGED, POINT_LIMIT }
+
+        TeleportResult teleport(String targetWorld, Route.Point from, Route.Point to, int maxPoints) {
+            if (paused) return TeleportResult.ALREADY_PAUSED;
+            if (!world.equals(targetWorld)) { paused = true; return TeleportResult.WORLD_CHANGED; }
+            List<Route.Point> additions = new ArrayList<>(2);
+            Route.Point last = points.getLast();
+            if (last.distanceSquared(from) > .01) { additions.add(from); last = from; }
+            if (last.distanceSquared(to) > .01) additions.add(to);
+            if (points.size() + additions.size() > maxPoints) { paused = true; return TeleportResult.POINT_LIMIT; }
+            points.addAll(additions);
+            return TeleportResult.CONTINUED;
+        }
     }
 }

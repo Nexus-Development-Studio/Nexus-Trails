@@ -6,7 +6,7 @@ Standalone personal particle navigation, extracted from NexusRegionManager's tra
 
 ## Install
 
-1. Put `nexustrails-1.1.0.jar` in the server's `plugins` folder.
+1. Put `nexustrails-1.1.1.jar` in the server's `plugins` folder.
 2. Start/restart the server. Settings appear in `plugins/NexusTrails/config.yml`.
 3. As an operator, create a destination using one of the examples below.
 
@@ -32,7 +32,7 @@ Stand at the start of a road/path:
 
 Walk the route on foot, then run `/trail save` at the destination. Players can now use `/trail market` from the same world. Their trail joins the closest segment and follows the recorded direction to the endpoint. The connection from the player to that segment is a straight line, so players should start near the recorded road. Avoid self-intersecting routes where possible.
 
-Use `/trail pause` and `/trail resume` for a break. Resume near the last recorded point. Teleporting, changing worlds, or flying interrupts recording; return to the route before resuming. `/trail cancel` discards only the unsaved recording. Unsaved recordings are discarded on disconnect/restart. Saved destinations survive restart.
+Use `/trail pause` and `/trail resume` for a break. Resume near the last recorded point. Same-world teleports keep recording and add the departure and destination points: the saved route connects the teleport gap with a straight segment, so use walking routes when guidance must avoid walls. Manually paused recordings remain paused. Changing worlds or flying interrupts recording; return to the route before resuming. `/trail cancel` discards only the unsaved recording. Unsaved recordings are discarded on disconnect/restart. Saved destinations survive restart.
 
 ## Commands
 
@@ -72,7 +72,7 @@ Edit the file while the server is stopped, or run `/trail reload` after edits. K
 
 The config controls particle spacing, look-ahead distance, height above recorded feet positions, update rate, particle budget, trail timeout, arrival radius, and recording limits. Defaults render up to 120 particles per update every 6 ticks, with a 20-block look-ahead and 180-second timeout. Values are bounded to prevent zero-spacing loops and excessive configured budgets.
 
-Trails continue after teleporting and rejoin the original route from the player's new position. Moving to another world pauses particles until the player returns to the destination's world; the existing timeout still applies and is not reset by teleporting. Route recording still pauses on teleport to avoid recording jumps. Trails stop on arrival, timeout, death, disconnect, plugin disable or explicit cancellation. Reloading stops ordinary trails. Tracing never loads chunks or changes blocks. The plugin does not create destinations automatically from NRM plots; it runs independently and does not alter NRM's existing trail feature.
+Trails continue after teleporting and rejoin the original route from the player's new position. Moving to another world pauses particles until the player returns to the destination's world; the existing timeout still applies and is not reset by teleporting. Recording also continues through same-world teleports, subject to the point limit. Trails stop on arrival, timeout, death, disconnect, plugin disable or explicit cancellation. Reloading stops ordinary trails. Tracing never loads chunks or changes blocks. The plugin does not create destinations automatically from NRM plots; it runs independently and does not alter NRM's existing trail feature.
 
 ## Build and verification
 
@@ -163,7 +163,7 @@ The `api` classifier JAR contains only the public interface. Run `mvn install` l
 <dependency>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.1.0</version>
+  <version>1.1.1</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>
