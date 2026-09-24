@@ -88,7 +88,7 @@ class QuestTrailServiceTest {
     private void render() { ticker.run(); ticker.run(); }
     private Location destination() { return new Location(world, 10.5, 64, .5); }
     private void expectParticles() {
-        particles.verify(() -> TrailParticles.spawn(eq(player), any(), any(), any(), anyDouble()), atLeastOnce());
+        particles.verify(() -> TrailParticles.render(eq(player), any(), any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()), atLeastOnce());
     }
 
     @Test void assignmentRendersPrivatelyAndCopiesMutableLocations() {
@@ -106,7 +106,7 @@ class QuestTrailServiceTest {
             citizens.when(() -> CitizensTarget.location(13)).thenReturn(null);
             service.showToNpc(id, 13);
             render();
-            particles.verifyNoInteractions();
+            particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
             service.clear(id);
             assertFalse(service.hasTrail(id));
             render();
@@ -119,19 +119,19 @@ class QuestTrailServiceTest {
             citizens.when(() -> CitizensTarget.location(11)).thenReturn(null);
             service.showToNpc(id, 11);
             render();
-            particles.verifyNoInteractions();
+            particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
             World other = mock(World.class);
             when(other.getName()).thenReturn("other");
             citizens.when(() -> CitizensTarget.location(11)).thenReturn(new Location(other, 10, 64, 0));
             render();
-            particles.verifyNoInteractions();
+            particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
             citizens.when(() -> CitizensTarget.location(11)).thenReturn(destination());
             render();
             expectParticles();
             citizens.when(() -> CitizensTarget.location(11)).thenReturn(new Location(world, 100, 64, 0));
             particles.clearInvocations();
             render();
-            particles.verifyNoInteractions();
+            particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
         }
     }
 
@@ -139,7 +139,7 @@ class QuestTrailServiceTest {
         when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(false);
         service.showToLocation(id, destination());
         render();
-        particles.verifyNoInteractions();
+        particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
         verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
         verify(world, never()).getChunkAt(anyInt(), anyInt());
     }
@@ -200,8 +200,8 @@ class QuestTrailServiceTest {
         service.showToLocation(id, new Location(terrain, 10.5, 64, .5));
         ticker.run();
         expectParticles();
-        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
-                argThat(p -> p.x() < -10), any(), anyDouble()), atLeastOnce());
+        particles.verify(() -> TrailParticles.render(eq(player), any(),
+                argThat(p -> p.at(2).x() < -10), anyDouble(),anyDouble(),anyDouble(),any(),anyString()), atLeastOnce());
     }
 
     @Test void obstructionAheadKeepsTheVisiblePrefix() {
@@ -210,8 +210,8 @@ class QuestTrailServiceTest {
         service.showToLocation(id, destination());
         ticker.run();
         expectParticles();
-        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
-                argThat(p -> p.x() >= 7), any(), anyDouble()), never());
+        particles.verify(() -> TrailParticles.render(eq(player), any(),
+                argThat(p -> p.end().x() >= 7), anyDouble(),anyDouble(),anyDouble(),any(),anyString()), never());
     }
 
     @Test void elevatorShowsEntranceThenResumesOnUpperFloorWithoutDrawingThroughFloor() throws Exception {
@@ -221,8 +221,8 @@ class QuestTrailServiceTest {
         service.showToLocation(id, new Location(world, 15.5, 84, .5));
         ticker.run();
         expectParticles();
-        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
-                argThat(p -> p.y() > 64.01), any(), anyDouble()), never());
+        particles.verify(() -> TrailParticles.render(eq(player), any(),
+                argThat(p -> p.end().y() > 64.01), anyDouble(),anyDouble(),anyDouble(),any(),anyString()), never());
         particles.clearInvocations();
         when(player.getLocation()).thenReturn(new Location(world, 5.5, 84, .5));
         PlayerTeleportEvent teleport = mock(PlayerTeleportEvent.class);
@@ -230,8 +230,8 @@ class QuestTrailServiceTest {
         service.onTeleport(teleport);
         ticker.run();
         expectParticles();
-        particles.verify(() -> TrailParticles.spawn(eq(player), any(),
-                argThat(p -> p.y() < 83.99), any(), anyDouble()), never());
+        particles.verify(() -> TrailParticles.render(eq(player), any(),
+                argThat(p -> p.at(0).y() < 83.99), anyDouble(),anyDouble(),anyDouble(),any(),anyString()), never());
         assertTrue(service.hasTrail(id));
     }
 }

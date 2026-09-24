@@ -6,11 +6,11 @@ Standalone personal particle navigation, extracted from NexusRegionManager's tra
 
 ## Install
 
-1. Put `nexustrails-1.2.0.jar` in the server's `plugins` folder.
+1. Put `nexustrails-1.3.0.jar` in the server's `plugins` folder.
 2. Start/restart the server. Settings appear in `plugins/NexusTrails/config.yml`.
 3. As an operator, create a destination using one of the examples below.
 
-The particle trail is visible only to the player following it. It blends a moving TRAIL core, color-transition dust and a soft dust glow, with a red-to-green progression toward the destination.
+The particle trail is visible only to the player following it. All 46 animation patterns, palettes and particle styles are configured in `animations.yml`. Ordinary trails and quest trails share the same animation engine. Plugins can select effects through an API or listener and register entirely new animations. See the [animation guide and full catalog](docs/ANIMATIONS.md).
 
 ## Quick waypoint
 
@@ -117,7 +117,7 @@ Record a route normally, use the elevator, then keep walking and save. Nexus Tra
 
 [Simple Elevators](https://www.spigotmc.org/resources/simple-elevators-1-8-26-2.44462/) uses Space to go up and Shift to go down. Nexus Trails relies on the resulting normal teleport event, so no Simple Elevators dependency or special config is required. Live compatibility with the installed elevator build should still be checked on a server.
 
-For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.2.0 and restart.
+For older recordings, near-vertical gaps over 1.25 blocks with less than one block of horizontal displacement are treated as elevator transitions automatically. Other old teleport gaps need to be rerecorded to capture explicit transition metadata. This heuristic can also classify near-vertical ladder/drop segments as transitions; record a walking alternative when appropriate. Existing configs work without changes: `connector-max-nodes` defaults to 768 and `join-radius` no longer restricts guidance. Replace the older Nexus Trails JAR with 1.3.0 and restart; the new `animations.yml` is created automatically.
 
 ### Console commands
 
@@ -173,7 +173,7 @@ The `api` classifier JAR contains only the public interface. Run `mvn install` l
 <dependency>
   <groupId>cc.nexusdev</groupId>
   <artifactId>nexustrails</artifactId>
-  <version>1.2.0</version>
+  <version>1.3.0</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>
@@ -198,8 +198,10 @@ trails.clear(player.getUniqueId());
 
 One quest assignment exists per player; each show call replaces it. Calls made off the Paper server thread are queued, so `hasTrail` may not reflect a queued mutation immediately. Locations are copied and must contain finite coordinates and a world. Negative NPC IDs are rejected. Offline players are not assigned guidance; restore it after login. Using an API instance after plugin shutdown throws `IllegalStateException` for mutations.
 
-`hasTrail` means an assignment exists, including when paused for missing/despawned NPCs, another world, a missing/blocked route, death or arrival. At arrival particles stop; the assignment remains until clear/disconnect, allowing a moving NPC to be followed again. Quest guidance does not use the ordinary trail timeout. Ordinary `/trail` sessions are independent; `questtrail clear` only clears quest guidance. Existing particles expire naturally according to the configured duration.
+`hasTrail` means an assignment exists, including when paused for missing/despawned NPCs, another world, a missing/blocked route, death or arrival. At arrival particles stop; the assignment remains until clear/disconnect, allowing a moving NPC to be followed again. Quest guidance does not use the ordinary trail timeout. Ordinary `/trail` sessions are independent; `questtrail clear` only clears quest guidance. Already emitted particles expire naturally; most particle lifetimes are client-controlled, while `TRAIL` uses the duration in `animations.yml`.
 
 ### Verification before deployment
 
 `mvn clean verify` builds both the server JAR and API JAR. Tests cover off-route guidance on the next tick, wall detours, distant partial connections, step surfaces, visible prefixes at obstructions, elevator entrances/exits, teleport persistence and legacy recordings, route corners and moving endpoints, collision coordinates/low ceilings/fences, assignment replacement, missing NPC/world recovery, unloaded chunks, console permissions, disconnect/shutdown cleanup, and restoration races. On a test Paper server, verify particle appearance, stairs, elevator movement, Citizens movement/despawn, BeautyQuests console actions and login restoration using real quest IDs before deploying to players.
+
+Animation tests exercise every built-in across a complete cycle, check distinct traces, validate configurable palettes and plugin ownership, and test private emissions, budget enforcement, listener overrides and failure isolation. They also generate `target/animation-preview.html` (playable traces of all 46 effects) and `target/animation-atlas.png`. These are emitter simulations; Minecraft textures and particle lifetime still need in-game visual verification.

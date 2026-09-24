@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import cc.nexusdev.trails.api.animation.TrailKind;
 
 /** Personal forward-moving TRAIL particles, color-transition accents, and dust glow extracted from NRM. */
 public final class TrailService {
@@ -39,6 +40,7 @@ public final class TrailService {
         Session session = sessions.remove(id);
         if (session == null) return false;
         session.cancel();
+        TrailParticles.forget(id,TrailKind.ORDINARY);
         return true;
     }
     /** Rejoin the original route from the player's actual position on the next entity tick. */
@@ -64,10 +66,11 @@ public final class TrailService {
             this.player = player; this.destination = destination; this.settings = settings; this.path = path;
         }
         void cancel() { ScheduledTask current = task; if (current != null) current.cancel(); }
-        void retired() { sessions.remove(player.getUniqueId(), this); }
+        void retired() { if(sessions.remove(player.getUniqueId(), this)) TrailParticles.forget(player.getUniqueId(),TrailKind.ORDINARY); }
         void finish(String message) {
             if (sessions.remove(player.getUniqueId(), this)) {
                 cancel();
+                TrailParticles.forget(player.getUniqueId(),TrailKind.ORDINARY);
                 if (message != null && player.isOnline()) player.sendMessage(message);
             }
         }
@@ -92,13 +95,7 @@ public final class TrailService {
             double progress = path.progress(position);
             double end = Math.min(path.length(), progress + settings.maxAhead());
             double start = Math.min(end, progress + settings.minAhead());
-            int spawned = 0;
-            for (double distance = start; distance <= end && spawned + 6 <= settings.budget(); distance += settings.spacing()) {
-                Route.Point p = path.at(distance), ahead = path.at(Math.min(path.length(), distance + .8));
-                double ratio = path.length() <= .001 ? 1 : distance / path.length();
-                TrailParticles.spawn(player, settings, p, ahead, ratio);
-                spawned += 6;
-            }
+            TrailParticles.render(player,settings,path,start,end,(System.nanoTime()-started)/1_000_000_000.0,TrailKind.ORDINARY,destination.id());
         }
     }
 }

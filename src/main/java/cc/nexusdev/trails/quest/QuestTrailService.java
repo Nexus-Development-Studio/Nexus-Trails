@@ -2,6 +2,7 @@ package cc.nexusdev.trails.quest;
 
 import cc.nexusdev.trails.*;
 import cc.nexusdev.trails.api.QuestTrailAPI;
+import cc.nexusdev.trails.api.animation.TrailKind;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -56,6 +57,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
     }
 
     private void assign(UUID id, Session session) {
+        TrailParticles.forget(id,TrailKind.QUEST);
         restores.remove(id); // a new command/API decision always wins over delayed login restoration
         Player player = Bukkit.getPlayer(id);
         if (player != null && player.isOnline()) {
@@ -67,7 +69,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
 
     @Override public void clear(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
-        submit(() -> { restores.remove(playerId); sessions.remove(playerId); });
+        submit(() -> { restores.remove(playerId); sessions.remove(playerId); TrailParticles.forget(playerId,TrailKind.QUEST); });
     }
 
     @Override public boolean hasTrail(UUID playerId) { return sessions.containsKey(Objects.requireNonNull(playerId)); }
@@ -83,7 +85,10 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         for (Map.Entry<UUID, Session> entry : sessions.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
             Session session = entry.getValue();
-            if (player == null || !player.isOnline()) { sessions.remove(entry.getKey(), session); continue; }
+            if (player == null || !player.isOnline()) {
+                if(sessions.remove(entry.getKey(), session)) TrailParticles.forget(entry.getKey(),TrailKind.QUEST);
+                continue;
+            }
             if (++session.ticks % render.interval() != 0) continue;
             try { render(player, session, render); }
             catch (ReflectiveOperationException | IllegalStateException ex) {
@@ -138,12 +143,9 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
             notice(player, session, "Use the elevator or teleport here; your trail continues on the other side.");
         else session.notice = null;
         RouteGeometry.Path display = new RouteGeometry.Path(visible);
-        int spawned = 0;
-        for (double d = Math.min(display.length(), render.minAhead()); d <= display.length() && spawned + 6 <= render.budget(); d += render.spacing()) {
-            TrailParticles.spawn(player, render, display.at(d), display.at(Math.min(display.length(), d + .8)),
-                    display.length() <= .001 ? 1 : d / display.length());
-            spawned += 6;
-        }
+        TrailParticles.render(player,render,display,Math.min(display.length(),render.minAhead()),display.length(),
+                (System.nanoTime()-session.started)/1_000_000_000.0,TrailKind.QUEST,
+                session.npcId==null?"location:"+target.getWorld().getName()+":"+target.getX()+":"+target.getY()+":"+target.getZ():"npc:"+session.npcId);
     }
 
     private record Plan(RouteGeometry.Path path, boolean teleport) {}
@@ -229,6 +231,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         restoreTasks.forEach(BukkitTask::cancel);
         restoreTasks.clear();
         restores.clear();
+        sessions.keySet().forEach(id->TrailParticles.forget(id,TrailKind.QUEST));
         sessions.clear();
     }
 
@@ -238,6 +241,7 @@ public final class QuestTrailService implements QuestTrailAPI, Listener {
         int ticks;
         String notice;
         boolean warned;
+        final long started=System.nanoTime();
         Plan plan;
         Route.Point planTarget;
         int planAt;

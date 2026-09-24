@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nexus Trails — Animation Library</title>
+<style>
+body{margin:0;background:#101821;color:#eef2f5;font:15px system-ui,sans-serif}header{padding:28px 4vw;position:sticky;top:0;background:#101821ee;z-index:2;border-bottom:1px solid #344352}h1{margin:0 0 8px;font-size:26px}p{margin:7px 0;color:#adbfce;max-width:1000px;line-height:1.5}input,button{border:1px solid #4a6277;background:#202d3b;color:#eef2f5;border-radius:6px;padding:9px 12px;font:inherit;margin:10px 8px 0 0}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;padding:24px 4vw}article{background:#162331;border:1px solid #304456;border-radius:10px;overflow:hidden}h2{font-size:15px;margin:14px 16px 0}canvas{display:block;width:100%;height:210px}small{display:block;margin:0 16px 12px;color:#adc4d8}
+</style>
+<header><h1>Nexus Trails · 46 animations</h1><p>Live emitter traces from the actual Java animation implementations. Colors come from animations.yml. This preview shows positions and brightness, not Minecraft's particle lifetime or texture.</p><input id="filter" placeholder="Find an animation…" aria-label="Filter animations"><button id="toggle">Pause</button><button id="restart">Restart cycles</button></header>
+<main id="grid"></main>
+<script>
+const data=__FRAMES__;
+const cards=data.map(item=>{const card=document.createElement('article'),label=item.id.split(':')[1].split('-').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');card.innerHTML='<h2>'+label+'</h2><canvas width="580" height="420"></canvas><small>'+item.id+'</small>';document.querySelector('#grid').append(card);return{item,card,ctx:card.querySelector('canvas').getContext('2d')};});
+let start=performance.now(),paused=false,pausedAt=0;
+document.querySelector('#filter').oninput=e=>cards.forEach(c=>c.card.hidden=!c.item.id.includes(e.target.value.toLowerCase().replaceAll(' ','-')));
+document.querySelector('#toggle').onclick=e=>{paused=!paused;if(paused)pausedAt=performance.now();else start+=performance.now()-pausedAt;e.target.textContent=paused?'Play':'Pause';};
+document.querySelector('#restart').onclick=()=>{start=performance.now();pausedAt=start;};
+function project(x,y,z){return[290+(x-z)*17,130+(x+z)*8-y*34];}
+function draw(now){for(const {item,card,ctx} of cards){if(card.hidden)continue;ctx.clearRect(0,0,580,420);ctx.strokeStyle='#425265';ctx.lineWidth=2;ctx.setLineDash([5,8]);ctx.beginPath();[[0,0,0],[10,0,0],[10,0,10]].forEach((p,i)=>{const q=project(...p);i?ctx.lineTo(...q):ctx.moveTo(...q);});ctx.stroke();ctx.setLineDash([]);const index=Math.floor((((paused?pausedAt:now)-start)/1000/item.seconds%1)*item.frames.length);for(const [x,y,z,rgb] of item.frames[Math.max(0,index)]){const [a,b]=project(x,y,z),color='#'+rgb.toString(16).padStart(6,'0');ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=5;ctx.beginPath();ctx.arc(a,b,2.7,0,Math.PI*2);ctx.fill();}ctx.shadowBlur=0;}requestAnimationFrame(draw);}requestAnimationFrame(draw);
+</script></html>

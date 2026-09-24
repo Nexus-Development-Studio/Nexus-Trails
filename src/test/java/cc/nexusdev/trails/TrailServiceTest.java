@@ -22,8 +22,8 @@ class TrailServiceTest {
             when(f.player.getLocation()).thenReturn(new Location(f.world, 0, 64, 0));
             f.service.rejoin(f.id);
             f.tick();
-            particles.verify(() -> TrailParticles.spawn(eq(f.player), any(),
-                    eq(new Route.Point(2, 64, 0)), any(), anyDouble()));
+            particles.verify(() -> TrailParticles.render(eq(f.player), any(),
+                    argThat(path -> path.at(2).equals(new Route.Point(2,64,0))), eq(2.0), anyDouble(),anyDouble(),any(),anyString()));
             verify(f.task, never()).cancel();
             assertTrue(f.service.stop(f.id));
         }
@@ -43,8 +43,8 @@ class TrailServiceTest {
             when(f.player.getWorld()).thenReturn(f.world);
             when(f.player.getLocation()).thenReturn(new Location(f.world, 0, 64, 0));
             f.tick();
-            particles.verify(() -> TrailParticles.spawn(eq(f.player), any(),
-                    eq(new Route.Point(2, 64, 0)), any(), anyDouble()));
+            particles.verify(() -> TrailParticles.render(eq(f.player), any(),
+                    argThat(path -> path.at(2).equals(new Route.Point(2,64,0))), eq(2.0), anyDouble(),anyDouble(),any(),anyString()));
             assertTrue(f.service.stop(f.id));
         }
     }
@@ -56,7 +56,7 @@ class TrailServiceTest {
             when(f.player.getLocation()).thenReturn(new Location(f.world, 20, 64, 0));
             f.service.rejoin(f.id);
             f.tick();
-            particles.verifyNoInteractions();
+            particles.verify(() -> TrailParticles.render(any(),any(),any(),anyDouble(),anyDouble(),anyDouble(),any(),anyString()),never());
             verify(f.task).cancel();
             assertFalse(f.service.stop(f.id));
         }

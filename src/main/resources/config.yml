@@ -7,6 +7,8 @@ render:
   max-ahead: 20.0
   max-particles-per-update: 120
   timeout-seconds: 180
+  # Legacy setting retained for config compatibility. Particle appearance and TRAIL duration
+  # are now controlled by animations.yml (style.duration-ticks).
   trail-duration-ticks: 40
   height-offset: 0.25
   arrival-radius: 2.0

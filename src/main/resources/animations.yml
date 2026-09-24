@@ -1,0 +1,124 @@
+# All colors and default particle choices live here, never inside an animation algorithm.
+# Short IDs resolve to nexustrails:<id>. Custom plugins register their own namespace.
+default-animation: comet
+fallback-animation: breathing
+style:
+  particle: DUST
+  palette: ['#FFD166', '#F4F1DE', '#80CED7']
+  period-seconds: 3.0
+  scale: 1.0
+  width: 0.8
+  height: 1.0
+  brightness: 1.0
+  base-brightness: 0.08
+  size: 0.8
+  # Used by TRAIL particles; DUST lifetime is controlled by the Minecraft client.
+  duration-ticks: 12
+  parameters:
+    markers: 5
+    frequency: 3
+    pulse-width: 0.12
+    tail-length: 0.3
+    ring-points: 12
+    origin: 0.0
+    wait-distance: 3.0
+    look-ahead: 5.0
+
+# Each pattern inherits style above. Override any style key or parameter per pattern.
+# Custom animation profiles may be added here as 'myplugin:my-animation': {...}.
+patterns:
+  breathing:
+    period-seconds: 4.0
+  chase: {}
+  comet:
+    parameters: {tail-length: 0.3}
+  wave:
+    period-seconds: 4.0
+    parameters: {frequency: 3}
+  ripple:
+    parameters: {origin: 0.0, pulse-width: 0.08}
+  heartbeat:
+    period-seconds: 2.0
+    parameters: {pulse-width: 0.07}
+  twinkle:
+    period-seconds: 5.0
+  sparkle:
+    period-seconds: 2.0
+  scan:
+    period-seconds: 5.0
+  sequential-fill:
+    period-seconds: 5.0
+  dripping:
+    parameters: {frequency: 5}
+  theater-chase:
+    period-seconds: 2.0
+  stacking:
+    period-seconds: 6.0
+    parameters: {markers: 5, pulse-width: 0.08}
+  crossfade-chase: {}
+  tick-tock:
+    period-seconds: 4.0
+  clock-hands:
+    period-seconds: 6.0
+    parameters: {markers: 4}
+  time-skip:
+    period-seconds: 4.0
+  reverse-echo: {}
+  clockwork-footsteps:
+    period-seconds: 5.0
+  unwinding-spring:
+    period-seconds: 5.0
+  steam-bursts:
+    period-seconds: 4.0
+  fuse-burn:
+    period-seconds: 2.0
+  orbiting-guide:
+    period-seconds: 4.0
+  shattered-seconds:
+    period-seconds: 4.0
+  pendulum:
+    period-seconds: 5.0
+  ink-reveal:
+    period-seconds: 5.0
+  mechanical-relay:
+    period-seconds: 4.0
+  ghost-of-tomorrow:
+    period-seconds: 6.0
+  escaping-seconds:
+    period-seconds: 4.0
+  clockwork-moth:
+    period-seconds: 5.0
+  broken-timeline:
+    period-seconds: 5.0
+  pocket-watch-swing:
+    period-seconds: 5.0
+  borrowed-footsteps:
+    period-seconds: 6.0
+  mechanical-fireflies:
+    period-seconds: 5.0
+  stitching-time:
+    period-seconds: 4.0
+  falling-hourglass:
+    period-seconds: 5.0
+  echo-doors:
+    period-seconds: 6.0
+    parameters: {markers: 3}
+  magnetic-shavings:
+    period-seconds: 4.0
+  clock-teeth:
+    period-seconds: 4.0
+  rewinding-ribbon:
+    period-seconds: 5.0
+  future-glimpse:
+    period-seconds: 5.0
+    parameters: {markers: 4}
+  pressure-leak:
+    period-seconds: 4.0
+  orbit-collapse:
+    period-seconds: 6.0
+  unfinished-blueprint:
+    period-seconds: 6.0
+  delayed-shadow:
+    period-seconds: 4.0
+  second-hand-sweep:
+    period-seconds: 6.0

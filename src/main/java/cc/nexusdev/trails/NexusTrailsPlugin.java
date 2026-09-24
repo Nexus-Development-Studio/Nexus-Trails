@@ -16,25 +16,36 @@ import cc.nexusdev.trails.api.QuestTrailAPI;
 import cc.nexusdev.trails.quest.QuestTrailService;
 import cc.nexusdev.trails.quest.QuestTrailCommand;
 import org.bukkit.plugin.ServicePriority;
+import cc.nexusdev.trails.animation.AnimationEngine;
+import cc.nexusdev.trails.animation.AnimationCommand;
+import cc.nexusdev.trails.api.animation.TrailAnimationAPI;
 
 public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
     private static final Set<String> RESERVED = Set.of("help", "list", "stop", "go", "set", "record", "pause", "resume", "save", "cancel", "delete", "reload");
     private RouteStore store;
     private TrailService trails;
     private QuestTrailService questTrails;
+    private AnimationEngine animations;
     private volatile TrailSettings settings;
     private final Map<UUID, Recording> recordings = new ConcurrentHashMap<>();
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        if(!new java.io.File(getDataFolder(),"animations.yml").exists()) saveResource("animations.yml",false);
         store = new RouteStore(getDataFolder().toPath().resolve("destinations.yml"));
-        try { store.load(); settings = TrailSettings.read(getConfig()); }
+        try { store.load(); settings = TrailSettings.read(getConfig()); animations=new AnimationEngine(this); }
         catch (Exception ex) {
-            getLogger().severe("Could not load destinations: " + ex.getMessage());
+            getLogger().severe("Could not load Nexus Trails configuration: " + ex.getMessage());
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         trails = new TrailService(this);
+        TrailParticles.initialize(animations);
+        getServer().getPluginManager().registerEvents(animations,this);
+        getServer().getServicesManager().register(TrailAnimationAPI.class,animations,this,ServicePriority.Normal);
+        AnimationCommand animationCommand=new AnimationCommand(animations);
+        Objects.requireNonNull(getCommand("trailanimation")).setExecutor(animationCommand);
+        Objects.requireNonNull(getCommand("trailanimation")).setTabCompleter(animationCommand);
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("trail")).setExecutor(this);
         Objects.requireNonNull(getCommand("trail")).setTabCompleter(this);
@@ -57,6 +68,8 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
         if (questTrails != null) questTrails.shutdown();
         getServer().getServicesManager().unregisterAll(this);
         if (trails != null) trails.shutdown();
+        if(animations!=null) animations.shutdown();
+        TrailParticles.initialize(null);
         recordings.clear();
     }
 
@@ -82,6 +95,7 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
             }
             if (action.equals("reload")) {
                 store.load(); reloadConfig(); settings = TrailSettings.read(getConfig());
+                animations.reload();
                 if (questTrails != null) questTrails.reload();
                 trails.shutdown();
                 sender.sendMessage("§aDestinations and configuration reloaded; ordinary trails stopped. Quest guidance uses the updated configuration."); return true;
