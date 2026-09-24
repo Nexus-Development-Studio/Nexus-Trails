@@ -1,9 +1,7 @@
 package cc.nexusdev.trails;
 
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
-import org.bukkit.Color;
 import org.bukkit.Location;
-import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import java.util.Map;
@@ -85,15 +83,7 @@ public final class TrailService {
             for (double distance = start; distance <= end && spawned + 6 <= settings.budget(); distance += settings.spacing()) {
                 Route.Point p = path.at(distance), ahead = path.at(Math.min(path.length(), distance + .8));
                 double ratio = path.length() <= .001 ? 1 : distance / path.length();
-                Color color = Color.fromRGB((int) Math.round(255 * (1 - ratio)), (int) Math.round(255 * ratio), 0);
-                double y = p.y() + settings.height();
-                Location target = new Location(player.getWorld(), ahead.x(), ahead.y() + settings.height(), ahead.z());
-                player.spawnParticle(Particle.TRAIL, p.x(), y, p.z(), 4, .25, .15, .25, 0,
-                        new Particle.Trail(target, color, settings.duration()));
-                player.spawnParticle(Particle.DUST_COLOR_TRANSITION, p.x(), y, p.z(), 1, .15, 0, .15, 0,
-                        new Particle.DustTransition(color, Color.BLUE, 1.4f));
-                player.spawnParticle(Particle.DUST, p.x(), y, p.z(), 1, .08, 0, .08, 0,
-                        new Particle.DustOptions(color, 1.2f));
+                TrailParticles.spawn(player, settings, p, ahead, ratio);
                 spawned += 6;
             }
         }

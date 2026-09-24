@@ -15,3 +15,24 @@ recording:
   max-points: 5000
   # Larger movement is treated as a teleport; pause until recording is resumed.
   max-step-distance: 8.0
+
+# Optional Paper-only Citizens / BeautyQuests integration.
+# Record routes with /trail record <id>, walk the road toward the NPC, /trail save.
+# Multiple routes per NPC can cover different approaches. No direct-line fallback.
+quest-trails:
+  join-radius: 2.0
+  target-radius: 3.0
+  npc-routes: {}
+  # Example, after recording these routes:
+  # npc-routes:
+  #   '11': [village-to-guide]
+  #   '13': [guide-to-merchant]
+  # Routes eligible for showToLocation / questtrail show ... location.
+  location-routes: []
+  # On login, first matching rule wins. Values are BeautyQuests QUEST IDs, not NPC IDs.
+  # Match: after-quest completed, until-quest neither active nor completed.
+  # Replace the example quest IDs with your actual IDs before enabling.
+  restore-rules: []
+  # restore-rules:
+  #   - {after-quest: 101, until-quest: 102, npc: 13}
+  #   - {after-quest: 100, until-quest: 101, npc: 11}

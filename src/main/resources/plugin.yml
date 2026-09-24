@@ -5,11 +5,19 @@ description: Personal particle trails to saved waypoints and recorded routes.
 api-version: '1.21.11'
 folia-supported: true
 author: NexusDev
+softdepend: [Citizens, BeautyQuests]
 commands:
+  questtrail:
+    description: Assign private quest guidance to an NPC or location.
+    usage: /questtrail <show|clear|status> <player>
+    permission: nexustrails.quest.admin
   trail:
     description: Follow a particle trail to a destination.
     usage: /trail <destination|list|stop|help>
 permissions:
+  nexustrails.quest.admin:
+    description: Assign, clear and inspect other players' quest trails.
+    default: op
   nexustrails.use:
     description: Follow trails and list destinations.
     default: true

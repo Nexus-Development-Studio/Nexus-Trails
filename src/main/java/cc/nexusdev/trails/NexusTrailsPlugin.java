@@ -12,11 +12,16 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import cc.nexusdev.trails.api.QuestTrailAPI;
+import cc.nexusdev.trails.quest.QuestTrailService;
+import cc.nexusdev.trails.quest.QuestTrailCommand;
+import org.bukkit.plugin.ServicePriority;
 
 public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
     private static final Set<String> RESERVED = Set.of("help", "list", "stop", "go", "set", "record", "pause", "resume", "save", "cancel", "delete", "reload");
     private RouteStore store;
     private TrailService trails;
+    private QuestTrailService questTrails;
     private volatile TrailSettings settings;
     private final Map<UUID, Recording> recordings = new ConcurrentHashMap<>();
 
@@ -33,9 +38,32 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("trail")).setExecutor(this);
         Objects.requireNonNull(getCommand("trail")).setTabCompleter(this);
+        if (!isFolia()) {
+            try {
+                questTrails = new QuestTrailService(this, store, () -> settings);
+                getServer().getPluginManager().registerEvents(questTrails, this);
+                getServer().getServicesManager().register(QuestTrailAPI.class, questTrails, this, ServicePriority.Normal);
+                getServer().getOnlinePlayers().forEach(questTrails::restore);
+            } catch (IllegalArgumentException ex) {
+                getLogger().severe("Quest trails disabled: " + ex.getMessage());
+            }
+        } else getLogger().info("Quest integration requires Paper; standalone trails remain available on Folia.");
+        QuestTrailCommand questCommand = new QuestTrailCommand(questTrails);
+        Objects.requireNonNull(getCommand("questtrail")).setExecutor(questCommand);
+        Objects.requireNonNull(getCommand("questtrail")).setTabCompleter(questCommand);
         getLogger().info("Nexus Trails loaded " + store.all().size() + " destinations.");
     }
-    @Override public void onDisable() { if (trails != null) trails.shutdown(); recordings.clear(); }
+    @Override public void onDisable() {
+        if (questTrails != null) questTrails.shutdown();
+        getServer().getServicesManager().unregisterAll(this);
+        if (trails != null) trails.shutdown();
+        recordings.clear();
+    }
+
+    private static boolean isFolia() {
+        try { Class.forName("io.papermc.paper.threadedregions.RegionizedServer"); return true; }
+        catch (ClassNotFoundException ignored) { return false; }
+    }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("nexustrails.use") && !sender.hasPermission("nexustrails.admin")) {
@@ -54,8 +82,9 @@ public final class NexusTrailsPlugin extends JavaPlugin implements Listener {
             }
             if (action.equals("reload")) {
                 store.load(); reloadConfig(); settings = TrailSettings.read(getConfig());
+                if (questTrails != null) questTrails.reload();
                 trails.shutdown();
-                sender.sendMessage("§aDestinations and configuration reloaded; active trails stopped."); return true;
+                sender.sendMessage("§aDestinations and configuration reloaded; ordinary trails stopped. Quest guidance uses the updated configuration."); return true;
             }
             if (action.equals("delete")) {
                 if (args.length != 3 || !args[2].equals("DELETE")) {
